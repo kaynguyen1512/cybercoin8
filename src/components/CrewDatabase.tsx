@@ -16,16 +16,17 @@ interface CrewMember {
   name: string;
   img: string;
   side: Side;
+  meta: [string, string];
 }
 
 const CREW: CrewMember[] = [
-  { file: 'FILE 01', codename: 'THE LITTLE DEVIL', name: 'Rebecca', img: IMAGES.crew.rebecca, side: 'left' },
-  { file: 'FILE 02', codename: 'THE PATRIARCH', name: 'Maine', img: IMAGES.crew.maine, side: 'right' },
-  { file: 'FILE 03', codename: 'THE GHOST', name: 'Kiwi', img: IMAGES.crew.kiwi, side: 'left' },
-  { file: 'FILE 04', codename: 'THE BLADE', name: 'Dorio', img: IMAGES.crew.dorio, side: 'right' },
-  { file: 'FILE 05', codename: 'THE LOUDMOUTH', name: 'Pilar', img: IMAGES.crew.pilar, side: 'left' },
-  { file: 'FILE 06', codename: 'THE MOON DREAMER', name: 'Lucy Kushinada', img: IMAGES.crew.lucy, side: 'right' },
-  { file: 'FILE 07', codename: 'THE KID', name: 'David Martinez', img: IMAGES.crew.david, side: 'center' },
+  { file: 'FILE 01', codename: 'THE LITTLE DEVIL', name: 'Rebecca', img: IMAGES.crew.rebecca, side: 'left', meta: ['SECURITY LEVEL: BLACK', 'ARASAKA ARCHIVE'] },
+  { file: 'FILE 02', codename: 'THE PATRIARCH', name: 'Maine', img: IMAGES.crew.maine, side: 'right', meta: ['SECURITY LEVEL: RED', 'MILITECH RECORD'] },
+  { file: 'FILE 03', codename: 'THE GHOST', name: 'Kiwi', img: IMAGES.crew.kiwi, side: 'left', meta: ['STATUS: VERIFIED', 'NET-77 ARCHIVE'] },
+  { file: 'FILE 04', codename: 'THE BLADE', name: 'Dorio', img: IMAGES.crew.dorio, side: 'right', meta: ['SECURITY LEVEL: BLACK', 'MILITECH RECORD'] },
+  { file: 'FILE 05', codename: 'THE LOUDMOUTH', name: 'Pilar', img: IMAGES.crew.pilar, side: 'left', meta: ['BIO-CHIP: ACTIVE', 'NIGHT CITY DB'] },
+  { file: 'FILE 06', codename: 'THE MOON DREAMER', name: 'Lucy Kushinada', img: IMAGES.crew.lucy, side: 'right', meta: ['SECURITY LEVEL: CLASSIFIED', 'ARASAKA ARCHIVE'] },
+  { file: 'FILE 07', codename: 'THE KID', name: 'David Martinez', img: IMAGES.crew.david, side: 'center', meta: ['STATUS: VERIFIED', 'MILITECH RECORD'] },
 ];
 
 const COUNT = CREW.length;          // 7
@@ -97,7 +98,7 @@ function SectionHeader() {
 
 interface SceneRefs {
   scene: (el: HTMLDivElement | null) => void;
-  text: (slot: number, el: HTMLParagraphElement | HTMLHeadingElement | null) => void;
+  text: (slot: number, el: HTMLElement | null) => void;
 }
 
 function CrewScene({ member, index, refs }: { member: CrewMember; index: number; refs: SceneRefs }) {
@@ -130,31 +131,53 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
     </div>
   );
 
+  const align = isFinal
+    ? 'items-center text-center'
+    : isLeft
+    ? 'items-start text-left'
+    : 'items-end text-right';
+
+  const justify = isFinal ? 'justify-center' : isLeft ? 'justify-start' : 'justify-end';
+
   const textBlock = (
-    <div
-      className={`flex flex-col max-w-sm ${
-        isFinal ? 'items-center text-center'
-        : isLeft ? 'items-start text-left'
-        : 'items-end text-right'
-      }`}
-    >
-      <p
-        ref={(el) => refs.text(0, el)}
-        className="font-mono text-[11px] tracking-[0.42em] text-gray-500"
-        style={{ opacity: 0, willChange: 'transform, opacity' }}
-      >
-        {member.file}
-      </p>
+    <div className={`flex flex-col max-w-sm ${align}`}>
+      <div className={`flex items-center gap-2 ${justify}`}>
+        <span
+          ref={(el) => refs.text(4, el)}
+          className="crew-file-led"
+          style={{ opacity: 0, willChange: 'opacity' }}
+        />
+        <p
+          ref={(el) => refs.text(0, el)}
+          className="font-mono text-[11px] tracking-[0.5em] text-gray-600"
+          style={{ opacity: 0, willChange: 'transform, opacity' }}
+        >
+          {member.file}
+        </p>
+      </div>
       <p
         ref={(el) => refs.text(1, el)}
-        className="mt-4 font-mono text-xs tracking-[0.38em] uppercase text-cyber-cyan"
+        className="crew-codename mt-5 font-mono text-xs uppercase tracking-[0.42em]"
         style={{ opacity: 0, willChange: 'transform, opacity' }}
       >
         {member.codename}
       </p>
+      <div
+        ref={(el) => refs.text(3, el)}
+        className={`mt-3 flex flex-col ${align}`}
+        style={{ opacity: 0, willChange: 'transform, opacity' }}
+      >
+        <span className="font-mono text-[9px] tracking-[0.3em] text-gray-600">
+          {member.meta[0]}
+        </span>
+        <span className="crew-cursor mt-1 font-mono text-[9px] tracking-[0.3em] text-gray-600">
+          {member.meta[1]}
+        </span>
+        <div className="crew-divider mt-4 w-32" />
+      </div>
       <h3
         ref={(el) => refs.text(2, el)}
-        className={`mt-3 font-display font-black leading-[0.92] tracking-tight text-white ${
+        className={`crew-name mt-4 font-display font-black leading-[0.92] tracking-tight text-white ${
           isFinal ? 'text-[clamp(3.2rem,9vw,6.5rem)]' : 'text-[clamp(2.6rem,6.5vw,5rem)]'
         }`}
         style={{ opacity: 0, willChange: 'transform, opacity' }}
@@ -202,8 +225,39 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
    SCROLL ANIMATION ENGINE
    ═══════════════════════════════════════════════════════════════════ */
 
-// Progressive text reveal: FILE → CODENAME → NAME
-function revealText(els: (HTMLParagraphElement | HTMLHeadingElement | null)[], f: number) {
+// One-shot decode scramble: characters briefly resolve from random symbols
+// into the final text, like an encrypted record decrypting. Fires once per
+// element, never replays while the record stays visible.
+const SCRAMBLE_CHARS = '#@%/_=01*<>$';
+function startDecode(el: HTMLElement) {
+  const finalText = el.textContent ?? '';
+  if (!finalText) return;
+  const len = finalText.length;
+  const duration = 170 + Math.random() * 70; // 170–240ms
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = (now - start) / duration;
+    if (t >= 1) {
+      el.textContent = finalText;
+      return;
+    }
+    const resolved = Math.floor(t * len);
+    let out = '';
+    for (let i = 0; i < len; i++) {
+      const ch = finalText[i];
+      if (ch === ' ' || i < resolved) out += ch;
+      else out += SCRAMBLE_CHARS[(Math.random() * SCRAMBLE_CHARS.length) | 0];
+    }
+    el.textContent = out;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Progressive text reveal: FILE → CODENAME → NAME (timing unchanged).
+// Slots 0–2 are the decoded labels; slot 3 (metadata + divider) rides the
+// codename's timing, slot 4 (status LED) rides the FILE label's timing.
+function revealText(els: (HTMLElement | null)[], f: number) {
   const fe = easeInOutCubic(clamp01(f));
   for (let j = 0; j < 3; j++) {
     const el = els[j];
@@ -211,6 +265,20 @@ function revealText(els: (HTMLParagraphElement | HTMLHeadingElement | null)[], f
     const op = clamp01((fe - j * 0.33) / 0.33);
     el.style.opacity = String(op);
     el.style.transform = `translateY(${(1 - op) * 12}px)`;
+    if (op > 0.04 && !el.dataset.decoded) {
+      el.dataset.decoded = '1';
+      startDecode(el);
+    }
+  }
+  const meta = els[3];
+  if (meta) {
+    const op = clamp01((fe - 0.33) / 0.33);
+    meta.style.opacity = String(op);
+    meta.style.transform = `translateY(${(1 - op) * 12}px)`;
+  }
+  const led = els[4];
+  if (led) {
+    led.style.opacity = String(clamp01(fe));
   }
 }
 
@@ -218,7 +286,7 @@ function useCrewEngine(
   sectionRef: React.RefObject<HTMLElement | null>,
   sceneRefs: React.RefObject<(HTMLDivElement | null)[]>,
   bgRefs: React.RefObject<(HTMLDivElement | null)[]>,
-  textRefs: React.RefObject<(HTMLParagraphElement | HTMLHeadingElement | null)[][]>,
+  textRefs: React.RefObject<(HTMLElement | null)[][]>,
 ) {
   // The camera target is driven by ScrollTrigger progress (which Lenis feeds).
   // The controller eases toward that target with momentum — a tiny cinematic
@@ -269,7 +337,7 @@ export default function CrewDatabase() {
   const sectionRef = useRef<HTMLElement | null>(null);
   const sceneRefs = useRef<(HTMLDivElement | null)[]>([]);
   const bgRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const textRefs = useRef<(HTMLParagraphElement | HTMLHeadingElement | null)[][]>([]);
+  const textRefs = useRef<(HTMLElement | null)[][]>([]);
 
   useCrewEngine(sectionRef, sceneRefs, bgRefs, textRefs);
 
@@ -323,7 +391,7 @@ export default function CrewDatabase() {
                 refs={{
                   scene: (el) => { sceneRefs.current[i] = el; },
                   text: (slot, el) => {
-                    const row = textRefs.current[i] ?? [null, null, null];
+                    const row = textRefs.current[i] ?? [null, null, null, null, null];
                     row[slot] = el;
                     textRefs.current[i] = row;
                   },
@@ -401,6 +469,86 @@ function CrewFXStyles() {
 .crew-bloom { position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(0,240,255,0.12), transparent 70%); animation: crewBloom 5s ease-in-out infinite; pointer-events:none; mix-blend-mode:screen; }
 .crew-holo { position:absolute; inset:0; border:1px solid rgba(0,240,255,0.28); animation: crewHoloGlow 4s ease-in-out infinite; pointer-events:none; }
 .crew-led { animation: crewLedPulse 2s ease-in-out infinite; }
+
+/* ── Personnel-database text panel ── */
+@keyframes crewFileLed {
+  0%,100% { box-shadow: 0 0 2px rgba(0,240,255,0.4); }
+  50% { box-shadow: 0 0 5px rgba(0,240,255,0.8), 0 0 10px rgba(0,240,255,0.4); }
+}
+.crew-file-led {
+  width: 5px; height: 5px; border-radius: 9999px;
+  background: #00f0ff;
+  animation: crewFileLed 2.6s ease-in-out infinite;
+}
+@keyframes crewHoloShimmer {
+  0% { background-position: 220% 0; }
+  100% { background-position: -120% 0; }
+}
+.crew-codename {
+  background: linear-gradient(100deg,
+    rgba(0,240,255,0.45) 0%,
+    rgba(0,240,255,0.95) 42%,
+    rgba(210,250,255,0.98) 50%,
+    rgba(0,240,255,0.95) 58%,
+    rgba(0,240,255,0.45) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 0 5px rgba(0,240,255,0.45));
+  animation: crewHoloShimmer 7s linear infinite;
+}
+@keyframes crewNameGhost {
+  0%, 86%, 100% {
+    text-shadow: 0 0 10px rgba(0,240,255,0.22), 0 0 28px rgba(0,240,255,0.10);
+  }
+  89% {
+    text-shadow: -1.5px 0 rgba(255,0,168,0.30), 1.5px 0 rgba(0,240,255,0.30), 0 0 10px rgba(0,240,255,0.22);
+  }
+  92% {
+    text-shadow: 0 0 10px rgba(0,240,255,0.22), 0 0 28px rgba(0,240,255,0.10);
+  }
+  95% {
+    text-shadow: 1px 0 rgba(255,0,168,0.22), -1px 0 rgba(0,240,255,0.22), 0 0 10px rgba(0,240,255,0.22);
+  }
+}
+.crew-name { animation: crewNameGhost 8s ease-in-out infinite; }
+.crew-divider {
+  position: relative;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0.6;
+}
+.crew-divider::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.45), transparent);
+}
+.crew-divider::after {
+  content: '';
+  position: absolute; top: 0; left: 0;
+  height: 100%; width: 38%;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.95), transparent);
+  box-shadow: 0 0 8px rgba(0,240,255,0.6);
+  animation: crewDividerSweep 4.8s ease-in-out infinite;
+}
+@keyframes crewDividerSweep {
+  0% { transform: translateX(-110%); opacity: 0; }
+  18% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { transform: translateX(280%); opacity: 0; }
+}
+@keyframes crewCursorBlink {
+  0%, 48% { opacity: 0.85; }
+  50%, 100% { opacity: 0; }
+}
+.crew-cursor::after {
+  content: '▌';
+  margin-left: 5px;
+  color: rgba(0,240,255,0.7);
+  animation: crewCursorBlink 1.3s steps(1) infinite;
+}
     `}</style>
   );
 }
