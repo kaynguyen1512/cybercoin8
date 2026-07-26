@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, Users, Lock, Skull } from 'lucide-react';
 
 const STATS = [
@@ -15,52 +15,35 @@ const SEGMENTS = [
   { label: 'HOLD', pct: 7, color: '#39FF14', text: 'text-cyber-dark', note: '.48%' },
 ];
 
-const PARTICLES = [
-  { left: '8%', top: '18%', delay: '0s', dur: '14s', size: 2 },
-  { left: '22%', top: '72%', delay: '3.5s', dur: '17s', size: 3 },
-  { left: '41%', top: '30%', delay: '2.2s', dur: '15s', size: 2 },
-  { left: '63%', top: '64%', delay: '5.4s', dur: '18s', size: 2 },
-  { left: '79%', top: '24%', delay: '1.8s', dur: '16s', size: 3 },
-  { left: '90%', top: '58%', delay: '6.1s', dur: '13s', size: 2 },
+const DATA_WORDS = [
+  '95%', 'BURN', 'LP LOCKED', 'TOKEN', '0xAF23...', 'BLOCK', 'CONFIRMED', '69420T',
+  'AUTO', 'SYNC', '0x4C2E...', 'GAS 21', 'SWAP', 'MINT', 'HOLDER', 'POOL',
+  '0x9B1D...', 'CHAIN', '0xF7A0...', 'DEX', 'NODE 7', 'PEER 847', 'MEMPOOL 142',
+  '0xB71C...', 'HASH', 'VERIFY', '0x3D9A...', 'NET 99.8%', 'TX 0x77', 'BLOCK 18942103',
 ];
 
-const DATA_FRAGMENTS = [
-  '95%', 'LP LOCKED', '0xA83F...', 'BURN', 'TOTAL SUPPLY', '69420T', 'DEX', 'TOKEN', 'BLOCK', 'CONFIRMED',
-  '0x4C2E...', 'GAS 21', 'SWAP', 'MINT', '0x9B1D...', 'HOLDER', 'POOL', '0xF7A0...', 'SYNC', 'CHAIN',
+const HOLO_PANELS = [
+  { title: 'NODE SYNC', lines: ['STATUS: ONLINE', 'PEERS: 847', 'LATENCY: 12ms'], pos: { top: '6%', left: '3%' } },
+  { title: 'GAS ORACLE', lines: ['GWEI: 21.4', 'FAST: 18.2', 'SLOW: 14.9'], pos: { top: '10%', right: '4%' } },
+  { title: 'MEMPOOL', lines: ['PENDING: 142', 'CONFIRMED: 89.4k', 'TPS: 18.7'], pos: { bottom: '8%', left: '5%' } },
+  { title: 'BLOCK', lines: ['HEIGHT: 18,942,103', 'HASH: 0x77Ae..', 'TX: 312'], pos: { bottom: '6%', right: '3%' } },
 ];
 
-const FRAGMENT_POSITIONS = [
-  { left: '6%', top: '82%', delay: '0s', dur: '13s' },
-  { left: '14%', top: '12%', delay: '4s', dur: '15s' },
-  { left: '26%', top: '88%', delay: '7s', dur: '14s' },
-  { left: '33%', top: '20%', delay: '2s', dur: '16s' },
-  { left: '44%', top: '76%', delay: '9s', dur: '13s' },
-  { left: '52%', top: '14%', delay: '5s', dur: '15s' },
-  { left: '61%', top: '84%', delay: '1s', dur: '17s' },
-  { left: '70%', top: '22%', delay: '8s', dur: '14s' },
-  { left: '78%', top: '78%', delay: '3s', dur: '16s' },
-  { left: '87%', top: '18%', delay: '6s', dur: '13s' },
-  { left: '19%', top: '46%', delay: '10s', dur: '15s' },
-  { left: '48%', top: '52%', delay: '2.5s', dur: '14s' },
-  { left: '73%', top: '48%', delay: '7.5s', dur: '16s' },
-];
-
-// Network nodes (positions in %) and the edges connecting them.
+// Hand-placed network node mesh (16 nodes) — spread across the section, behind content.
 const NODES = [
-  { x: 12, y: 22 }, { x: 28, y: 64 }, { x: 44, y: 30 }, { x: 58, y: 70 },
-  { x: 72, y: 26 }, { x: 86, y: 60 }, { x: 38, y: 50 }, { x: 64, y: 44 },
+  { x: 8, y: 14 }, { x: 22, y: 38 }, { x: 14, y: 66 }, { x: 30, y: 86 },
+  { x: 40, y: 22 }, { x: 52, y: 52 }, { x: 46, y: 88 }, { x: 62, y: 30 },
+  { x: 70, y: 62 }, { x: 78, y: 18 }, { x: 86, y: 44 }, { x: 92, y: 78 },
+  { x: 58, y: 76 }, { x: 34, y: 54 }, { x: 18, y: 24 }, { x: 74, y: 86 },
 ];
 const EDGES: [number, number][] = [
-  [0, 1], [1, 2], [2, 6], [6, 3], [3, 5], [5, 7], [7, 4], [4, 2], [6, 7], [0, 6], [3, 7],
+  [0, 1], [1, 13], [13, 2], [2, 3], [3, 6], [6, 12], [12, 8], [8, 10], [10, 11],
+  [1, 4], [4, 5], [5, 7], [7, 9], [9, 10], [5, 13], [5, 8], [7, 8], [4, 9],
+  [0, 14], [14, 1], [13, 5], [8, 12], [11, 9], [3, 15], [15, 6], [12, 15],
 ];
-// Light pulses travel along specific edges at staggered intervals.
-const PULSES: { edge: [number, number]; delay: string; dur: string }[] = [
-  { edge: [0, 1], delay: '0s', dur: '6s' },
-  { edge: [2, 6], delay: '2.5s', dur: '7s' },
-  { edge: [3, 5], delay: '5s', dur: '6.5s' },
-  { edge: [7, 4], delay: '8s', dur: '7.5s' },
-  { edge: [6, 3], delay: '11s', dur: '6s' },
-];
+
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
+const rs = (n: number) => `${n.toFixed(2)}s`;
 
 function CountUp({ end, suffix, glow }: { end: number; suffix: string; glow: string }) {
   const [val, setVal] = useState(0);
@@ -133,6 +116,46 @@ export default function Tokenomics() {
   const sectionRef = useRef<HTMLElement>(null);
   const [barActive, setBarActive] = useState(false);
 
+  // Generate randomized ambient layers once (CSR-only, so Math.random is safe).
+  const flowLines = useMemo(
+    () => Array.from({ length: 40 }, (_, i) => ({
+      key: i,
+      top: `${rand(2, 98)}%`,
+      len: `${rand(60, 260).toFixed(0)}px`,
+      dur: rs(rand(8, 22)),
+      delay: rs(rand(0, 18)),
+      dir: Math.random() > 0.5 ? 'normal' : 'reverse',
+      op: rand(0.04, 0.06).toFixed(3),
+    })),
+    [],
+  );
+
+  const fragments = useMemo(
+    () => Array.from({ length: 30 }, (_, i) => ({
+      key: i,
+      word: DATA_WORDS[i % DATA_WORDS.length],
+      left: `${rand(2, 94)}%`,
+      top: `${rand(8, 92)}%`,
+      dur: rs(rand(12, 24)),
+      delay: rs(rand(0, 20)),
+    })),
+    [],
+  );
+
+  const pulses = useMemo(
+    () => Array.from({ length: 14 }, (_, i) => {
+      const e = EDGES[Math.floor(Math.random() * EDGES.length)];
+      return {
+        key: i,
+        a: e[0],
+        b: e[1],
+        dur: rs(rand(5, 9)),
+        delay: rs(rand(0, 8)),
+      };
+    }),
+    [],
+  );
+
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
@@ -153,16 +176,17 @@ export default function Tokenomics() {
     <section id="tokenomics" ref={sectionRef} className="tk-section relative overflow-hidden px-5 py-28">
       <TokenomicsStyles />
 
-      {/* Background: layered living data system */}
+      {/* Background: layered living blockchain operating system */}
       <div className="tk-bg pointer-events-none absolute inset-0 -z-10" aria-hidden>
-        {/* Layer 4: soft aurora glows */}
+        {/* Layer 4: huge aurora glows — cyan, purple, blue */}
         <div className="tk-aurora tk-aurora-a absolute" />
         <div className="tk-aurora tk-aurora-b absolute" />
+        <div className="tk-aurora tk-aurora-c absolute" />
 
         {/* Layer 1: animated cyber grid */}
         <div className="tk-grid absolute inset-0" />
 
-        {/* Layer 3: network visualization */}
+        {/* Layer 3: expanded network visualization */}
         <div className="tk-net absolute inset-0">
           <svg className="tk-net-svg absolute inset-0 h-full w-full" preserveAspectRatio="none">
             {EDGES.map(([a, b], i) => (
@@ -174,59 +198,78 @@ export default function Tokenomics() {
               />
             ))}
             {NODES.map((n, i) => (
-              <circle key={i} cx={`${n.x}%`} cy={`${n.y}%`} r={2.5} className="tk-node" />
+              <circle key={i} cx={`${n.x}%`} cy={`${n.y}%`} r={2.5} className="tk-node" style={{ animationDelay: `${(i % 6) * 1.1}s` }} />
             ))}
-            {PULSES.map((p, i) => {
-              const [a, b] = p.edge;
-              return (
-                <circle key={i} r={2} className="tk-pulse">
-                  <animateMotion
-                    dur={p.dur}
-                    repeatCount="indefinite"
-                    begin={p.delay}
-                    path={`M${NODES[a].x},${NODES[a].y} L${NODES[b].x},${NODES[b].y}`}
-                  />
-                </circle>
-              );
-            })}
+            {pulses.map((p) => (
+              <circle key={p.key} r={2} className="tk-pulse">
+                <animateMotion
+                  dur={p.dur}
+                  repeatCount="indefinite"
+                  begin={p.delay}
+                  path={`M${NODES[p.a].x},${NODES[p.a].y} L${NODES[p.b].x},${NODES[p.b].y}`}
+                />
+              </circle>
+            ))}
           </svg>
         </div>
 
-        {/* Layer 2: floating blockchain data fragments */}
-        {FRAGMENT_POSITIONS.map((pos, i) => (
+        {/* Layer: data flow lines (40) traveling across */}
+        {flowLines.map((l) => (
           <span
-            key={i}
+            key={l.key}
+            className="tk-flow absolute"
+            style={{
+              top: l.top,
+              width: l.len,
+              height: '1px',
+              ['--op' as string]: l.op,
+              animation: `tk-flow ${l.dur} linear ${l.delay} infinite`,
+              animationDirection: l.dir,
+            }}
+          />
+        ))}
+
+        {/* Layer 2: floating blockchain data fragments (30) */}
+        {fragments.map((f) => (
+          <span
+            key={f.key}
             className="tk-data absolute font-mono text-[11px] tracking-[0.25em] text-cyber-cyan"
             style={{
-              left: pos.left,
-              top: pos.top,
-              animation: `tk-data-rise ${pos.dur} linear ${pos.delay} infinite`,
+              left: f.left,
+              top: f.top,
+              animation: `tk-data-rise ${f.dur} linear ${f.delay} infinite`,
             }}
           >
-            {DATA_FRAGMENTS[i % DATA_FRAGMENTS.length]}
+            {f.word}
           </span>
+        ))}
+
+        {/* Holographic diagnostic panels */}
+        {HOLO_PANELS.map((p, i) => (
+          <div
+            key={i}
+            className="tk-holo absolute font-mono"
+            style={{
+              ...p.pos,
+              animation: `tk-holo-life ${rs(rand(22, 34))} ease-in-out ${rs(rand(0, 12))} infinite`,
+            }}
+          >
+            <div className="tk-holo-title">{p.title}</div>
+            {p.lines.map((ln, j) => (
+              <div key={j} className="tk-holo-line">{ln}</div>
+            ))}
+          </div>
         ))}
 
         {/* Layer 5: film grain / digital noise */}
         <div className="tk-noise absolute inset-0" />
 
-        {/* Particles */}
-        {PARTICLES.map((p, i) => (
-          <span
-            key={i}
-            className="tk-particle absolute rounded-full"
-            style={{
-              left: p.left,
-              top: p.top,
-              width: p.size,
-              height: p.size,
-              animation: `tk-float ${p.dur} ease-in-out ${p.delay} infinite`,
-            }}
-          />
-        ))}
-
-        {/* Soft diagnostic scan line every 8s */}
-        <div className="tk-scan absolute inset-x-0" />
+        {/* Multi-directional scan bars */}
+        <div className="tk-scan tk-scan-h1 absolute inset-x-0" />
+        <div className="tk-scan tk-scan-h2 absolute inset-x-0" />
+        <div className="tk-scan tk-scan-v1 absolute inset-y-0" />
+        <div className="tk-scan tk-scan-v2 absolute inset-y-0" />
+        <div className="tk-scan tk-scan-d1 absolute" />
 
         {/* Card backlight radial glow */}
         <div className="tk-cardglow absolute inset-x-0 top-[34%] h-[42%]" />
@@ -354,10 +397,25 @@ function TokenomicsStyles() {
   text-shadow: 0 0 8px rgba(0,240,255,0.4);
 }
 @keyframes tk-data-rise {
-  0% { transform: translateY(18px); opacity: 0; }
-  18% { opacity: 0.06; }
-  82% { opacity: 0.05; }
-  100% { transform: translateY(-46px); opacity: 0; }
+  0% { transform: translateY(22px); opacity: 0; }
+  16% { opacity: 0.055; }
+  84% { opacity: 0.045; }
+  100% { transform: translateY(-54px); opacity: 0; }
+}
+
+/* Data flow lines */
+.tk-flow {
+  left: 0;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,1) 50%, transparent);
+  opacity: 0;
+  will-change: transform, opacity;
+  filter: blur(0.4px);
+}
+@keyframes tk-flow {
+  0% { transform: translateX(-260px); opacity: 0; }
+  12% { opacity: var(--op); }
+  88% { opacity: var(--op); }
+  100% { transform: translateX(100vw); opacity: 0; }
 }
 
 /* Layer 3: network visualization */
@@ -373,46 +431,87 @@ function TokenomicsStyles() {
   filter: drop-shadow(0 0 3px rgba(0,240,255,0.8));
   animation: tk-node-breathe 7s ease-in-out infinite;
 }
-.tk-node:nth-child(odd) { animation-delay: 2s; }
-.tk-node:nth-child(even) { animation-delay: 4s; }
 @keyframes tk-node-breathe {
-  0%, 100% { opacity: 0.55; }
+  0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
 .tk-pulse {
   fill: #ffffff;
   filter: drop-shadow(0 0 5px rgba(0,240,255,1)) drop-shadow(0 0 10px rgba(0,240,255,0.6));
-  opacity: 0.9;
+  animation: tk-pulse-flash 1.4s ease-in-out infinite;
+}
+@keyframes tk-pulse-flash {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 0.35; }
 }
 
-/* Layer 4: soft aurora glows */
+/* Holographic diagnostic panels */
+.tk-holo {
+  border: 1px solid rgba(0,240,255,0.14);
+  background: linear-gradient(160deg, rgba(10,16,24,0.5), rgba(8,12,18,0.3));
+  backdrop-filter: blur(4px);
+  padding: 10px 14px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: rgba(0,240,255,0.5);
+  opacity: 0;
+  letter-spacing: 0.12em;
+  will-change: transform, opacity;
+}
+.tk-holo-title {
+  color: rgba(0,240,255,0.7);
+  font-weight: 700;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(0,240,255,0.12);
+  padding-bottom: 3px;
+}
+.tk-holo-line { color: rgba(120,200,230,0.4); }
+@keyframes tk-holo-life {
+  0% { opacity: 0; transform: translateY(6px); }
+  12% { opacity: 0.5; transform: translateY(0); }
+  82% { opacity: 0.45; transform: translateY(-4px); }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+
+/* Layer 4: huge aurora glows */
 .tk-aurora {
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(110px);
   mix-blend-mode: screen;
   will-change: transform, opacity;
 }
 .tk-aurora-a {
-  width: 60vw; height: 60vw;
-  left: -10vw; top: -10vw;
+  width: 700px; height: 700px;
+  left: -120px; top: -120px;
   background: radial-gradient(circle, rgba(0,180,255,0.5), transparent 65%);
-  opacity: 0.16;
-  animation: tk-aurora-drift-a 34s ease-in-out infinite;
+  opacity: 0.18;
+  animation: tk-aurora-drift-a 54s ease-in-out infinite;
 }
 .tk-aurora-b {
-  width: 55vw; height: 55vw;
-  right: -12vw; bottom: -12vw;
+  width: 640px; height: 640px;
+  right: -140px; bottom: -140px;
   background: radial-gradient(circle, rgba(180,90,255,0.45), transparent 65%);
-  opacity: 0.13;
-  animation: tk-aurora-drift-b 42s ease-in-out infinite;
+  opacity: 0.15;
+  animation: tk-aurora-drift-b 66s ease-in-out infinite;
+}
+.tk-aurora-c {
+  width: 560px; height: 560px;
+  left: 30%; top: 40%;
+  background: radial-gradient(circle, rgba(40,120,255,0.4), transparent 65%);
+  opacity: 0.1;
+  animation: tk-aurora-drift-c 78s ease-in-out infinite;
 }
 @keyframes tk-aurora-drift-a {
-  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.16; }
-  50% { transform: translate(4vw,3vw) scale(1.08); opacity: 0.22; }
+  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.18; }
+  50% { transform: translate(40px,30px) scale(1.1); opacity: 0.24; }
 }
 @keyframes tk-aurora-drift-b {
-  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.13; }
-  50% { transform: translate(-3vw,-2vw) scale(1.1); opacity: 0.19; }
+  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.15; }
+  50% { transform: translate(-30px,-20px) scale(1.12); opacity: 0.21; }
+}
+@keyframes tk-aurora-drift-c {
+  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.1; }
+  50% { transform: translate(-24px,28px) scale(1.08); opacity: 0.16; }
 }
 
 /* Layer 5: film grain / digital noise */
@@ -430,31 +529,47 @@ function TokenomicsStyles() {
   100% { transform: translate(2px,-2px); }
 }
 
-/* Particles */
-.tk-particle {
-  background: #00f0ff;
-  box-shadow: 0 0 6px rgba(0,240,255,0.6);
-  opacity: 0.4;
+/* Multi-directional scan bars */
+.tk-scan { opacity: 0; will-change: transform, opacity; }
+.tk-scan-h1 {
+  height: 1px; top: 0;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.4), transparent);
+  animation: tk-scan-h 9s ease-in-out infinite;
 }
-@keyframes tk-float {
-  0%, 100% { transform: translate(0,0); opacity: 0.22; }
-  50% { transform: translate(8px,-22px); opacity: 0.5; }
+.tk-scan-h2 {
+  height: 1px; top: 0;
+  background: linear-gradient(90deg, transparent, rgba(180,90,255,0.32), transparent);
+  animation: tk-scan-h 13s ease-in-out 4s infinite;
 }
-
-/* Diagnostic scan line */
-.tk-scan {
-  height: 1px;
-  top: 0;
-  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.45), transparent);
-  opacity: 0;
-  animation: tk-scan-pass 8s ease-in-out infinite;
+.tk-scan-v1 {
+  width: 1px; left: 0;
+  background: linear-gradient(180deg, transparent, rgba(0,240,255,0.32), transparent);
+  animation: tk-scan-v 15s ease-in-out 2s infinite;
 }
-@keyframes tk-scan-pass {
+.tk-scan-v2 {
+  width: 1px; right: 0;
+  background: linear-gradient(180deg, transparent, rgba(0,180,255,0.28), transparent);
+  animation: tk-scan-v 11s ease-in-out 6s infinite;
+}
+.tk-scan-d1 {
+  width: 100%; height: 1px;
+  top: 0; left: 0;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.22), transparent);
+  transform-origin: left center;
+  transform: rotate(18deg);
+  animation: tk-scan-h 17s ease-in-out 3s infinite;
+}
+@keyframes tk-scan-h {
   0% { transform: translateY(0); opacity: 0; }
-  6% { opacity: 0.5; }
-  50% { transform: translateY(50vh); opacity: 0.4; }
-  94% { opacity: 0.3; }
+  8% { opacity: 0.5; }
+  92% { opacity: 0.3; }
   100% { transform: translateY(100vh); opacity: 0; }
+}
+@keyframes tk-scan-v {
+  0% { transform: translateX(0); opacity: 0; }
+  8% { opacity: 0.45; }
+  92% { opacity: 0.25; }
+  100% { transform: translateX(100vw); opacity: 0; }
 }
 
 /* Card backlight radial glow */
@@ -540,11 +655,11 @@ function TokenomicsStyles() {
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .tk-grid, .tk-noise, .tk-particle, .tk-card, .tk-scanline,
-  .tk-data, .tk-node, .tk-pulse, .tk-aurora, .tk-scan { animation: none !important; }
+  .tk-grid, .tk-noise, .tk-card, .tk-scanline, .tk-scan,
+  .tk-data, .tk-flow, .tk-node, .tk-pulse, .tk-aurora, .tk-holo { animation: none !important; }
   .tk-card { transition: none !important; }
   .tk-card:hover { transform: none !important; }
-  .tk-data, .tk-net { opacity: 0 !important; }
+  .tk-data, .tk-net, .tk-flow, .tk-holo { opacity: 0 !important; }
 }
     `}</style>
   );
