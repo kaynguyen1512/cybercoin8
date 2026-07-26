@@ -6,7 +6,6 @@ import Ticker, { MiniStats } from './components/Ticker';
 import Hero from './components/Hero';
 import About from './components/About';
 import CrewDatabase from './components/CrewDatabase';
-import Gallery from './components/Gallery';
 import Tokenomics from './components/Tokenomics';
 import CyberpsychoMeter from './components/CyberpsychoMeter';
 import Roadmap from './components/Roadmap';
