@@ -79,115 +79,282 @@ const PHASES: Phase[] = [
   },
 ];
 
+const GAP = 32;
+
+type Mode = 'idle' | 'drag' | 'wheel' | 'snap';
+type Setter = (value: number | string) => void;
+interface CardSetter { scale: Setter; opacity: Setter; rot: Setter; blur: Setter }
+
 export default function Roadmap() {
   const trackRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const cardEls = useRef<(HTMLDivElement | null)[]>([]);
-  const cardWidthRef = useRef(0);
+  const activeRef = useRef(0);
+
+  // interaction refs — never trigger re-renders during movement
   const dragRef = useRef<Draggable | null>(null);
+  const xSetterRef = useRef<Setter | null>(null);
+  const cardSettersRef = useRef<(CardSetter | null)[]>([]);
+  const targetXRef = useRef(0);
+  const currentXRef = useRef(0);
+  const modeRef = useRef<Mode>('idle');
+  const rafRef = useRef<number | null>(null);
+  const snapTimerRef = useRef<number | null>(null);
+  const snapTweenRef = useRef<gsap.core.Tween | null>(null);
+  const dimsRef = useRef({ cardW: 0, step: 0, minX: 0, maxX: 0, wrapW: 0 });
 
-  const updateCards = (x: number) => {
+  const measure = () => {
     const wrap = wrapRef.current;
-    const track = trackRef.current;
-    if (!wrap || !track) return;
+    const first = cardEls.current[0];
+    if (!wrap || !first) return;
+    const cardW = first.offsetWidth;
     const wrapW = wrap.offsetWidth;
-    const cardW = cardWidthRef.current || 1;
-    const step = cardW + 32; // gap
+    const step = cardW + GAP;
+    const maxX = (wrapW - cardW) / 2;
+    const minX = maxX - step * (PHASES.length - 1);
+    dimsRef.current = { cardW, step, minX, maxX, wrapW };
+  };
 
+  const posX = (idx: number) => {
+    const { step, maxX } = dimsRef.current;
+    return maxX - idx * step;
+  };
+
+  const clampX = (x: number) => {
+    const { minX, maxX } = dimsRef.current;
+    return Math.max(minX, Math.min(maxX, x));
+  };
+
+  const nearestIdx = (x: number) => {
+    const { step, maxX } = dimsRef.current;
+    const idx = Math.round((maxX - x) / step);
+    return Math.max(0, Math.min(PHASES.length - 1, idx));
+  };
+
+  // Continuous card update using quickSetters — no gsap.to() per frame.
+  const updateCards = (x: number) => {
+    const { cardW, step, wrapW } = dimsRef.current;
+    const setters = cardSettersRef.current;
     cardEls.current.forEach((card, i) => {
       if (!card) return;
+      const s = setters[i];
+      if (!s) return;
       const cardCenter = x + i * step + cardW / 2;
       const dist = Math.abs(wrapW / 2 - cardCenter);
       const norm = Math.min(1, dist / step);
-      const isActive = norm < 0.5;
-      const scale = 1 - norm * 0.1;
-      const opacity = 1 - norm * 0.45;
-      const blur = norm * 4;
-      const rotY = norm * 8 * (cardCenter < wrapW / 2 ? -1 : 1);
-      gsap.to(card, {
-        scale, opacity, rotationY: rotY, filter: `blur(${blur}px)`,
-        duration: 0.4, ease: 'power3.out', overwrite: 'auto',
-      });
-      if (isActive && i !== active) setActive(i);
+      s.scale(1 - norm * 0.1);
+      s.opacity(1 - norm * 0.45);
+      s.rot(norm * 8 * (cardCenter < wrapW / 2 ? -1 : 1));
+      s.blur(`blur(${norm * 4}px)`);
+      if (norm < 0.5 && activeRef.current !== i) {
+        activeRef.current = i;
+        setActive(i);
+      }
     });
   };
 
-  const snapTo = (idx: number) => {
-    const wrap = wrapRef.current;
-    const track = trackRef.current;
-    if (!wrap || !track) return;
-    const cardW = cardWidthRef.current || 1;
-    const step = cardW + 32;
-    const target = -(idx * step) + (wrap.offsetWidth - cardW) / 2;
-    gsap.to(track, { x: target, duration: 0.9, ease: 'power3.out', onUpdate: () => updateCards(gsap.getProperty(track, 'x') as number) });
-    setActive(idx);
+  const cancelSnap = () => {
+    if (snapTimerRef.current != null) {
+      clearTimeout(snapTimerRef.current);
+      snapTimerRef.current = null;
+    }
   };
 
+  const scheduleSnap = (delay = 200) => {
+    cancelSnap();
+    snapTimerRef.current = window.setTimeout(() => {
+      snapTimerRef.current = null;
+      if (modeRef.current === 'drag') return;
+      startSnap();
+    }, delay);
+  };
+
+  const startSnap = () => {
+    const track = trackRef.current;
+    if (!track) return;
+    const idx = nearestIdx(currentXRef.current);
+    const target = posX(idx);
+    if (Math.abs(target - currentXRef.current) < 0.5) {
+      if (activeRef.current !== idx) { activeRef.current = idx; setActive(idx); }
+      modeRef.current = 'idle';
+      return;
+    }
+    modeRef.current = 'snap';
+    snapTweenRef.current?.kill();
+    snapTweenRef.current = gsap.to(track, {
+      x: target,
+      duration: 0.8,
+      ease: 'power3.out',
+      onUpdate: () => {
+        currentXRef.current = gsap.getProperty(track, 'x') as number;
+        updateCards(currentXRef.current);
+      },
+      onComplete: () => {
+        snapTweenRef.current = null;
+        modeRef.current = 'idle';
+        if (activeRef.current !== idx) { activeRef.current = idx; setActive(idx); }
+      },
+    });
+  };
+
+  // Public snap used by the progress-dot buttons.
+  const snapTo = (idx: number) => {
+    const track = trackRef.current;
+    if (!track) return;
+    const d = dragRef.current;
+    if (d?.isDragging) return;
+    d?.tween?.kill();
+    cancelSnap();
+    const target = posX(idx);
+    currentXRef.current = gsap.getProperty(track, 'x') as number;
+    targetXRef.current = target;
+    modeRef.current = 'snap';
+    snapTweenRef.current?.kill();
+    snapTweenRef.current = gsap.to(track, {
+      x: target,
+      duration: 0.8,
+      ease: 'power3.out',
+      onUpdate: () => {
+        currentXRef.current = gsap.getProperty(track, 'x') as number;
+        updateCards(currentXRef.current);
+      },
+      onComplete: () => {
+        snapTweenRef.current = null;
+        modeRef.current = 'idle';
+        if (activeRef.current !== idx) { activeRef.current = idx; setActive(idx); }
+      },
+    });
+  };
+
+  // Initialize the whole interaction system exactly once.
   useEffect(() => {
     const wrap = wrapRef.current;
     const track = trackRef.current;
     if (!wrap || !track) return;
 
-    const measure = () => {
-      const first = cardEls.current[0];
-      if (!first) return;
-      cardWidthRef.current = first.offsetWidth;
-      // center first card
-      const cardW = cardWidthRef.current;
-      const step = cardW + 32;
-      const target = -(0 * step) + (wrap.offsetWidth - cardW) / 2;
-      gsap.set(track, { x: target });
-      updateCards(target);
-    };
     measure();
 
+    // quickSetters — cheapest possible per-frame writes
+    xSetterRef.current = gsap.quickSetter(track, 'x', 'px') as Setter;
+    cardSettersRef.current = cardEls.current.map((card) => {
+      if (!card) return null;
+      return {
+        scale: gsap.quickSetter(card, 'scale') as Setter,
+        opacity: gsap.quickSetter(card, 'opacity') as Setter,
+        rot: gsap.quickSetter(card, 'rotationY', 'deg') as Setter,
+        blur: gsap.quickSetter(card, 'filter') as Setter,
+      } as CardSetter;
+    });
+
+    const startX = posX(0);
+    targetXRef.current = startX;
+    currentXRef.current = startX;
+    gsap.set(track, { x: startX });
+    updateCards(startX);
+
+    // Single rAF loop for the entire section.
+    const tick = () => {
+      rafRef.current = requestAnimationFrame(tick);
+      const mode = modeRef.current;
+      if (mode === 'drag') {
+        // Draggable owns the transform during drag + inertia throw.
+        currentXRef.current = gsap.getProperty(track, 'x') as number;
+        updateCards(currentXRef.current);
+      } else if (mode === 'wheel') {
+        // Smooth LERP glide toward the wheel target.
+        const cur = currentXRef.current;
+        const tgt = targetXRef.current;
+        const next = cur + (tgt - cur) * 0.1;
+        currentXRef.current = Math.abs(tgt - next) < 0.3 ? tgt : next;
+        xSetterRef.current?.(currentXRef.current);
+        updateCards(currentXRef.current);
+      }
+      // 'snap' is driven by gsap.to(); 'idle' needs no work.
+    };
+    rafRef.current = requestAnimationFrame(tick);
+
+    // Draggable — created once, never recreated.
     const drag = Draggable.create(track, {
       type: 'x',
       inertia: true,
-      edgeResistance: 0.65,
-      bounds: { minX: -(cardWidthRef.current + 32) * (PHASES.length - 1) + (wrap.offsetWidth - cardWidthRef.current) / 2 - 60, maxX: (wrap.offsetWidth - cardWidthRef.current) / 2 + 60 },
-      onDrag: function () { updateCards(this.x); },
-      onThrowUpdate: function () { updateCards(this.x); },
-      onDragEnd: function () {
-        const step = (cardWidthRef.current || 1) + 32;
-        const idx = Math.round(-this.x / step);
-        snapTo(Math.max(0, Math.min(PHASES.length - 1, idx)));
+      edgeResistance: 0.85,
+      dragResistance: 0.05,
+      minimumMovement: 6,
+      allowNativeTouchScrolling: true,
+      bounds: { minX: dimsRef.current.minX - 80, maxX: dimsRef.current.maxX + 80 },
+      onPress: () => {
+        snapTweenRef.current?.kill();
+        snapTweenRef.current = null;
+        cancelSnap();
       },
-      snap: {
-        x: (endValue) => {
-          const step = (cardWidthRef.current || 1) + 32;
-          const idx = Math.round(-endValue / step);
-          const clamped = Math.max(0, Math.min(PHASES.length - 1, idx));
-          return -clamped * step + (wrap.offsetWidth - cardWidthRef.current) / 2;
-        },
+      onDragStart: () => {
+        modeRef.current = 'drag';
+      },
+      onThrowComplete: () => {
+        modeRef.current = 'idle';
+        scheduleSnap(200);
+      },
+      onRelease: () => {
+        // A click without crossing the drag threshold — reschedule a settle.
+        if (modeRef.current !== 'drag') scheduleSnap(200);
       },
     })[0];
     dragRef.current = drag;
 
-    // horizontal wheel support
+    // Smooth momentum wheel — accumulates into a target, LERPs, snaps after idle.
     const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault();
-        const dir = e.deltaY > 0 ? 1 : -1;
-        const next = Math.max(0, Math.min(PHASES.length - 1, active + dir));
-        snapTo(next);
+      const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      if (!delta) return;
+      e.preventDefault();
+      const d = dragRef.current;
+      if (modeRef.current === 'drag') {
+        if (d?.isDragging) return; // user is actively holding — ignore wheel
+        d?.tween?.kill(); // hijack an ongoing inertia throw
       }
+      if (modeRef.current === 'snap') {
+        snapTweenRef.current?.kill();
+        snapTweenRef.current = null;
+      }
+      modeRef.current = 'wheel';
+      currentXRef.current = gsap.getProperty(track, 'x') as number;
+      targetXRef.current = clampX(currentXRef.current - delta * 1.5);
+      scheduleSnap(200);
     };
     wrap.addEventListener('wheel', onWheel, { passive: false });
 
+    // Resize — re-measure and re-center on the active card without recreating Draggable.
+    let resizeTimer: number | null = null;
     const onResize = () => {
-      cardWidthRef.current = cardEls.current[0]?.offsetWidth || 0;
-      snapTo(active);
+      if (resizeTimer != null) clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        snapTweenRef.current?.kill();
+        snapTweenRef.current = null;
+        dragRef.current?.tween?.kill();
+        measure();
+        const t = posX(activeRef.current);
+        targetXRef.current = t;
+        currentXRef.current = t;
+        gsap.set(track, { x: t });
+        modeRef.current = 'idle';
+        updateCards(t);
+        if (dragRef.current) {
+          dragRef.current.applyBounds({ minX: dimsRef.current.minX - 80, maxX: dimsRef.current.maxX + 80 });
+        }
+      }, 150);
     };
     window.addEventListener('resize', onResize);
 
     return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      cancelSnap();
+      snapTweenRef.current?.kill();
       wrap.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', onResize);
       drag.kill();
     };
-  }, [active]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <section id="roadmap" className="relative overflow-hidden py-24">
