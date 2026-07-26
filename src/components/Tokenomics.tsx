@@ -16,14 +16,50 @@ const SEGMENTS = [
 ];
 
 const PARTICLES = [
-  { left: '8%', top: '18%', delay: '0s', dur: '11s', size: 2 },
-  { left: '22%', top: '72%', delay: '2.5s', dur: '14s', size: 3 },
-  { left: '41%', top: '30%', delay: '1.2s', dur: '12s', size: 2 },
-  { left: '63%', top: '64%', delay: '3.4s', dur: '15s', size: 2 },
-  { left: '79%', top: '24%', delay: '0.8s', dur: '13s', size: 3 },
-  { left: '90%', top: '58%', delay: '4.1s', dur: '10s', size: 2 },
-  { left: '34%', top: '84%', delay: '1.8s', dur: '12s', size: 2 },
-  { left: '56%', top: '14%', delay: '3s', dur: '14s', size: 2 },
+  { left: '8%', top: '18%', delay: '0s', dur: '14s', size: 2 },
+  { left: '22%', top: '72%', delay: '3.5s', dur: '17s', size: 3 },
+  { left: '41%', top: '30%', delay: '2.2s', dur: '15s', size: 2 },
+  { left: '63%', top: '64%', delay: '5.4s', dur: '18s', size: 2 },
+  { left: '79%', top: '24%', delay: '1.8s', dur: '16s', size: 3 },
+  { left: '90%', top: '58%', delay: '6.1s', dur: '13s', size: 2 },
+];
+
+const DATA_FRAGMENTS = [
+  '95%', 'LP LOCKED', '0xA83F...', 'BURN', 'TOTAL SUPPLY', '69420T', 'DEX', 'TOKEN', 'BLOCK', 'CONFIRMED',
+  '0x4C2E...', 'GAS 21', 'SWAP', 'MINT', '0x9B1D...', 'HOLDER', 'POOL', '0xF7A0...', 'SYNC', 'CHAIN',
+];
+
+const FRAGMENT_POSITIONS = [
+  { left: '6%', top: '82%', delay: '0s', dur: '13s' },
+  { left: '14%', top: '12%', delay: '4s', dur: '15s' },
+  { left: '26%', top: '88%', delay: '7s', dur: '14s' },
+  { left: '33%', top: '20%', delay: '2s', dur: '16s' },
+  { left: '44%', top: '76%', delay: '9s', dur: '13s' },
+  { left: '52%', top: '14%', delay: '5s', dur: '15s' },
+  { left: '61%', top: '84%', delay: '1s', dur: '17s' },
+  { left: '70%', top: '22%', delay: '8s', dur: '14s' },
+  { left: '78%', top: '78%', delay: '3s', dur: '16s' },
+  { left: '87%', top: '18%', delay: '6s', dur: '13s' },
+  { left: '19%', top: '46%', delay: '10s', dur: '15s' },
+  { left: '48%', top: '52%', delay: '2.5s', dur: '14s' },
+  { left: '73%', top: '48%', delay: '7.5s', dur: '16s' },
+];
+
+// Network nodes (positions in %) and the edges connecting them.
+const NODES = [
+  { x: 12, y: 22 }, { x: 28, y: 64 }, { x: 44, y: 30 }, { x: 58, y: 70 },
+  { x: 72, y: 26 }, { x: 86, y: 60 }, { x: 38, y: 50 }, { x: 64, y: 44 },
+];
+const EDGES: [number, number][] = [
+  [0, 1], [1, 2], [2, 6], [6, 3], [3, 5], [5, 7], [7, 4], [4, 2], [6, 7], [0, 6], [3, 7],
+];
+// Light pulses travel along specific edges at staggered intervals.
+const PULSES: { edge: [number, number]; delay: string; dur: string }[] = [
+  { edge: [0, 1], delay: '0s', dur: '6s' },
+  { edge: [2, 6], delay: '2.5s', dur: '7s' },
+  { edge: [3, 5], delay: '5s', dur: '6.5s' },
+  { edge: [7, 4], delay: '8s', dur: '7.5s' },
+  { edge: [6, 3], delay: '11s', dur: '6s' },
 ];
 
 function CountUp({ end, suffix, glow }: { end: number; suffix: string; glow: string }) {
@@ -117,10 +153,64 @@ export default function Tokenomics() {
     <section id="tokenomics" ref={sectionRef} className="tk-section relative overflow-hidden px-5 py-28">
       <TokenomicsStyles />
 
-      {/* Background: animated grid + particles */}
-      <div className="tk-bg pointer-events-none absolute inset-0 -z-10">
+      {/* Background: layered living data system */}
+      <div className="tk-bg pointer-events-none absolute inset-0 -z-10" aria-hidden>
+        {/* Layer 4: soft aurora glows */}
+        <div className="tk-aurora tk-aurora-a absolute" />
+        <div className="tk-aurora tk-aurora-b absolute" />
+
+        {/* Layer 1: animated cyber grid */}
         <div className="tk-grid absolute inset-0" />
+
+        {/* Layer 3: network visualization */}
+        <div className="tk-net absolute inset-0">
+          <svg className="tk-net-svg absolute inset-0 h-full w-full" preserveAspectRatio="none">
+            {EDGES.map(([a, b], i) => (
+              <line
+                key={i}
+                x1={`${NODES[a].x}%`} y1={`${NODES[a].y}%`}
+                x2={`${NODES[b].x}%`} y2={`${NODES[b].y}%`}
+                className="tk-edge"
+              />
+            ))}
+            {NODES.map((n, i) => (
+              <circle key={i} cx={`${n.x}%`} cy={`${n.y}%`} r={2.5} className="tk-node" />
+            ))}
+            {PULSES.map((p, i) => {
+              const [a, b] = p.edge;
+              return (
+                <circle key={i} r={2} className="tk-pulse">
+                  <animateMotion
+                    dur={p.dur}
+                    repeatCount="indefinite"
+                    begin={p.delay}
+                    path={`M${NODES[a].x},${NODES[a].y} L${NODES[b].x},${NODES[b].y}`}
+                  />
+                </circle>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Layer 2: floating blockchain data fragments */}
+        {FRAGMENT_POSITIONS.map((pos, i) => (
+          <span
+            key={i}
+            className="tk-data absolute font-mono text-[11px] tracking-[0.25em] text-cyber-cyan"
+            style={{
+              left: pos.left,
+              top: pos.top,
+              animation: `tk-data-rise ${pos.dur} linear ${pos.delay} infinite`,
+            }}
+          >
+            {DATA_FRAGMENTS[i % DATA_FRAGMENTS.length]}
+          </span>
+        ))}
+
+        {/* Layer 5: film grain / digital noise */}
         <div className="tk-noise absolute inset-0" />
+
+        {/* Particles */}
         {PARTICLES.map((p, i) => (
           <span
             key={i}
@@ -134,6 +224,12 @@ export default function Tokenomics() {
             }}
           />
         ))}
+
+        {/* Soft diagnostic scan line every 8s */}
+        <div className="tk-scan absolute inset-x-0" />
+
+        {/* Card backlight radial glow */}
+        <div className="tk-cardglow absolute inset-x-0 top-[34%] h-[42%]" />
       </div>
 
       <div className="mx-auto max-w-6xl">
@@ -231,37 +327,141 @@ function TokenomicsStyles() {
     <style>{`
 .tk-section { background-color: #050507; }
 
-/* Background grid + noise */
+/* Background layered system */
 .tk-bg { z-index: 0; }
+
+/* Layer 1: animated cyber grid */
 .tk-grid {
   background-image:
     linear-gradient(rgba(0,240,255,0.5) 1px, transparent 1px),
     linear-gradient(90deg, rgba(0,240,255,0.5) 1px, transparent 1px);
-  background-size: 48px 48px;
-  opacity: 0.05;
-  animation: tk-grid-move 22s linear infinite;
-  mask-image: radial-gradient(ellipse at 50% 40%, black 35%, transparent 80%);
-  -webkit-mask-image: radial-gradient(ellipse at 50% 40%, black 35%, transparent 80%);
-}
-.tk-noise {
-  opacity: 0.03;
-  background-image: repeating-radial-gradient(circle at 30% 40%, rgba(255,255,255,0.4) 0px, transparent 1px, transparent 2px);
-  mix-blend-mode: screen;
+  background-size: 56px 56px;
+  opacity: 0.04;
+  animation: tk-grid-move 28s linear infinite;
+  mask-image: radial-gradient(ellipse at 50% 45%, black 30%, transparent 82%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 45%, black 30%, transparent 82%);
 }
 @keyframes tk-grid-move {
   0% { background-position: 0 0; }
-  100% { background-position: 48px 48px; }
+  100% { background-position: 56px 56px; }
 }
 
-/* Floating particles */
+/* Layer 2: floating blockchain data fragments */
+.tk-data {
+  opacity: 0;
+  filter: blur(1.5px);
+  will-change: transform, opacity;
+  text-shadow: 0 0 8px rgba(0,240,255,0.4);
+}
+@keyframes tk-data-rise {
+  0% { transform: translateY(18px); opacity: 0; }
+  18% { opacity: 0.06; }
+  82% { opacity: 0.05; }
+  100% { transform: translateY(-46px); opacity: 0; }
+}
+
+/* Layer 3: network visualization */
+.tk-net { opacity: 0.07; }
+.tk-net-svg { overflow: visible; }
+.tk-edge {
+  stroke: #00f0ff;
+  stroke-width: 0.6;
+  opacity: 0.5;
+}
+.tk-node {
+  fill: #00f0ff;
+  filter: drop-shadow(0 0 3px rgba(0,240,255,0.8));
+  animation: tk-node-breathe 7s ease-in-out infinite;
+}
+.tk-node:nth-child(odd) { animation-delay: 2s; }
+.tk-node:nth-child(even) { animation-delay: 4s; }
+@keyframes tk-node-breathe {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.tk-pulse {
+  fill: #ffffff;
+  filter: drop-shadow(0 0 5px rgba(0,240,255,1)) drop-shadow(0 0 10px rgba(0,240,255,0.6));
+  opacity: 0.9;
+}
+
+/* Layer 4: soft aurora glows */
+.tk-aurora {
+  border-radius: 50%;
+  filter: blur(80px);
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+}
+.tk-aurora-a {
+  width: 60vw; height: 60vw;
+  left: -10vw; top: -10vw;
+  background: radial-gradient(circle, rgba(0,180,255,0.5), transparent 65%);
+  opacity: 0.16;
+  animation: tk-aurora-drift-a 34s ease-in-out infinite;
+}
+.tk-aurora-b {
+  width: 55vw; height: 55vw;
+  right: -12vw; bottom: -12vw;
+  background: radial-gradient(circle, rgba(180,90,255,0.45), transparent 65%);
+  opacity: 0.13;
+  animation: tk-aurora-drift-b 42s ease-in-out infinite;
+}
+@keyframes tk-aurora-drift-a {
+  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.16; }
+  50% { transform: translate(4vw,3vw) scale(1.08); opacity: 0.22; }
+}
+@keyframes tk-aurora-drift-b {
+  0%, 100% { transform: translate(0,0) scale(1); opacity: 0.13; }
+  50% { transform: translate(-3vw,-2vw) scale(1.1); opacity: 0.19; }
+}
+
+/* Layer 5: film grain / digital noise */
+.tk-noise {
+  opacity: 0.035;
+  background-image: repeating-radial-gradient(circle at 30% 40%, rgba(255,255,255,0.4) 0px, transparent 1px, transparent 2px);
+  mix-blend-mode: screen;
+  animation: tk-noise-shift 3s steps(4) infinite;
+}
+@keyframes tk-noise-shift {
+  0% { transform: translate(0,0); }
+  25% { transform: translate(-2px,1px); }
+  50% { transform: translate(1px,-1px); }
+  75% { transform: translate(-1px,2px); }
+  100% { transform: translate(2px,-2px); }
+}
+
+/* Particles */
 .tk-particle {
   background: #00f0ff;
   box-shadow: 0 0 6px rgba(0,240,255,0.6);
   opacity: 0.4;
 }
 @keyframes tk-float {
-  0%, 100% { transform: translate(0,0); opacity: 0.25; }
-  50% { transform: translate(8px,-22px); opacity: 0.6; }
+  0%, 100% { transform: translate(0,0); opacity: 0.22; }
+  50% { transform: translate(8px,-22px); opacity: 0.5; }
+}
+
+/* Diagnostic scan line */
+.tk-scan {
+  height: 1px;
+  top: 0;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.45), transparent);
+  opacity: 0;
+  animation: tk-scan-pass 8s ease-in-out infinite;
+}
+@keyframes tk-scan-pass {
+  0% { transform: translateY(0); opacity: 0; }
+  6% { opacity: 0.5; }
+  50% { transform: translateY(50vh); opacity: 0.4; }
+  94% { opacity: 0.3; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+/* Card backlight radial glow */
+.tk-cardglow {
+  background: radial-gradient(ellipse at 50% 50%, rgba(0,200,255,0.08), transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
 }
 
 /* Version badge subtle glow */
@@ -340,9 +540,11 @@ function TokenomicsStyles() {
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  .tk-grid, .tk-particle, .tk-card, .tk-scanline { animation: none !important; }
+  .tk-grid, .tk-noise, .tk-particle, .tk-card, .tk-scanline,
+  .tk-data, .tk-node, .tk-pulse, .tk-aurora, .tk-scan { animation: none !important; }
   .tk-card { transition: none !important; }
   .tk-card:hover { transform: none !important; }
+  .tk-data, .tk-net { opacity: 0 !important; }
 }
     `}</style>
   );
