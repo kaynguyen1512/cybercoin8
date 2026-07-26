@@ -73,12 +73,30 @@ const MEME_LEVELS = ['LOW', 'MED', 'HIGH', 'EXTREME', 'CRITICAL'];
 const NET_STATES = ['CONNECTED', 'SYNCING', 'RELAYING'];
 const AI_STATES = ['STABLE', 'RISING', 'OVERCLOCKED', 'CRITICAL'];
 
+const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+
 export default function CyberpsychoMeter() {
   const [level, setLevel] = useState(0);
   const [auto, setAuto] = useState(true);
   const sectionRef = useRef<HTMLDivElement>(null);
   const waveCanvas = useRef<HTMLCanvasElement>(null);
   const waveRef = useRef({ amp: 0, freq: 0, phase: 0 });
+  const waveReveal = useRef(0);
+  const waveActiveRef = useRef(false);
+  const barBootDone = useRef(false);
+
+  // Boot sequence state
+  const [active, setActive] = useState(false);
+  const [barActive, setBarActive] = useState(false);
+  const [waveActive, setWaveActive] = useState(false);
+  const [statusVisible, setStatusVisible] = useState(false);
+  const [bgBoost, setBgBoost] = useState(1);
+  const [displayLevel, setDisplayLevel] = useState(0);
+
+  const reduce = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    [],
+  );
 
   // Ambient layer configs (stable across renders)
   const netNodes = useMemo(() => makeNetNodes(20), []);
@@ -86,6 +104,49 @@ export default function CyberpsychoMeter() {
   const [netPulses, setNetPulses] = useState(() => makeNetPulses(netConns, 12));
   const dataLines = useMemo(() => makeDataLines(28), []);
   const statusTags = useMemo(() => makeStatusTags(10), []);
+
+  // Live diagnostic values — start at 0, interpolate toward targets only after boot
+  const [liveVals, setLiveVals] = useState<Record<string, number>>(() => {
+    const v: Record<string, number> = {};
+    for (const w of WIDGETS) if (w.jitter > 0) v[w.key] = 0;
+    return v;
+  });
+  const targets = useRef<Record<string, number>>({});
+
+  // Intersection Observer — trigger boot once at ~30% visible
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    if (reduce) {
+      setActive(true); setBarActive(true); setWaveActive(true);
+      setStatusVisible(true); setBgBoost(1);
+      waveReveal.current = 1; barBootDone.current = true;
+      return;
+    }
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          setActive(true);
+          obs.disconnect();
+        }
+      });
+    }, { threshold: 0.3 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [reduce]);
+
+  // Staged boot timeline
+  useEffect(() => {
+    if (!active || reduce) return;
+    const t1 = setTimeout(() => setWaveActive(true), 700);
+    const t2 = setTimeout(() => setBarActive(true), 900);
+    const t3 = setTimeout(() => setStatusVisible(true), 1500);
+    const t4 = setTimeout(() => setBgBoost(1), 1700);
+    setBgBoost(1.2);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
+  }, [active, reduce]);
+
+  useEffect(() => { waveActiveRef.current = waveActive; }, [waveActive]);
 
   // Auto-pan animation
   useEffect(() => {
@@ -108,11 +169,9 @@ export default function CyberpsychoMeter() {
     return () => cancelAnimationFrame(raf);
   }, [auto]);
 
-  const current = [...PHASES].reverse().find((p) => level >= p.pct) ?? PHASES[0];
+  const current = [...PHASES].reverse().find((p) => displayLevel >= p.pct) ?? PHASES[0];
 
-  // Live diagnostic values — smooth interpolation toward targets
-  const [liveVals, setLiveVals] = useState<Record<string, number>>({});
-  const targets = useRef<Record<string, number>>({});
+  // Recompute widget targets periodically
   useEffect(() => {
     const compute = () => {
       const t: Record<string, number> = {};
@@ -126,7 +185,9 @@ export default function CyberpsychoMeter() {
     return () => clearInterval(id);
   }, [level]);
 
+  // Smoothly interpolate widget values toward targets (only after active)
   useEffect(() => {
+    if (!active) return;
     let raf = 0;
     const tick = () => {
       setLiveVals((prev) => {
@@ -134,7 +195,7 @@ export default function CyberpsychoMeter() {
         for (const w of WIDGETS) {
           if (w.jitter <= 0) continue;
           const tgt = targets.current[w.key] ?? w.base(level);
-          const cur = prev[w.key] ?? tgt;
+          const cur = prev[w.key] ?? 0;
           next[w.key] = cur + (tgt - cur) * 0.08;
         }
         return next;
@@ -143,21 +204,38 @@ export default function CyberpsychoMeter() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [level]);
+  }, [level, active]);
 
   // Categorical states derived from level
   const memeIdx = Math.min(4, Math.floor(level / 20));
   const netIdx = level > 85 ? 1 : Math.random() > 0.5 ? 0 : 2;
   const aiIdx = Math.min(3, Math.floor(level / 26));
 
-  // Waveform canvas — amplitude/frequency scale with level
+  // Display level easing (slow boot fill, then fast tracking)
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      setDisplayLevel((d) => {
+        const tgt = barActive ? level : 0;
+        const diff = tgt - d;
+        const factor = barBootDone.current ? 0.25 : 0.06;
+        if (Math.abs(diff) < 0.3) { barBootDone.current = true; return tgt; }
+        return d + diff * factor;
+      });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [barActive, level]);
+
+  // Waveform canvas — progressive draw + amplitude/frequency scale with level
   useEffect(() => {
     const canvas = waveCanvas.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     let raf = 0;
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let last = performance.now();
     const resize = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const rect = canvas.getBoundingClientRect();
@@ -168,11 +246,20 @@ export default function CyberpsychoMeter() {
     resize();
     window.addEventListener('resize', resize);
 
-    const draw = () => {
+    const draw = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
       const rect = canvas.getBoundingClientRect();
       const w = rect.width;
       const h = rect.height;
       ctx.clearRect(0, 0, w, h);
+
+      // Progressive reveal
+      if (waveActiveRef.current) {
+        waveReveal.current = Math.min(1, waveReveal.current + dt * 2.5);
+      }
+      const revealW = waveReveal.current * w;
+
       const targetAmp = (level / 100) * (h * 0.34) + 2;
       const targetFreq = 0.012 + (level / 100) * 0.05;
       waveRef.current.amp += (targetAmp - waveRef.current.amp) * 0.06;
@@ -180,19 +267,8 @@ export default function CyberpsychoMeter() {
       waveRef.current.phase += 0.05 + (level / 100) * 0.12;
       const { amp, freq, phase } = waveRef.current;
       const color = current.color;
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      for (let x = 0; x <= w; x += 2) {
-        const noise = (Math.sin(x * freq * 3 + phase * 1.7) + Math.sin(x * freq * 7 + phase * 0.6)) * 0.3;
-        const y = h / 2 + Math.sin(x * freq + phase) * amp + noise * amp * 0.4;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      // faint baseline
+
+      // Faint baseline (full width)
       ctx.shadowBlur = 0;
       ctx.strokeStyle = 'rgba(0,240,255,0.08)';
       ctx.lineWidth = 1;
@@ -200,14 +276,38 @@ export default function CyberpsychoMeter() {
       ctx.moveTo(0, h / 2);
       ctx.lineTo(w, h / 2);
       ctx.stroke();
+
+      // Waveform — clipped to reveal width
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      for (let x = 0; x <= revealW; x += 2) {
+        const noise = (Math.sin(x * freq * 3 + phase * 1.7) + Math.sin(x * freq * 7 + phase * 0.6)) * 0.3;
+        const y = h / 2 + Math.sin(x * freq + phase) * amp + noise * amp * 0.4;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Leading edge glow during reveal
+      if (waveReveal.current < 1 && revealW > 0) {
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(revealW, h / 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       if (!reduce) raf = requestAnimationFrame(draw);
     };
-    draw();
+    raf = requestAnimationFrame(draw);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
     };
-  }, [level, current.color]);
+  }, [level, current.color, reduce]);
 
   // Radar speed + extra pulses scale with level
   const radarDur = Math.max(4, 8 - (level / 100) * 4);
@@ -218,14 +318,22 @@ export default function CyberpsychoMeter() {
 
   const glowIntensity = 0.4 + (level / 100) * 0.6;
 
+  // Boot style helper
+  const boot = (delay: number, extra: React.CSSProperties = {}): React.CSSProperties => ({
+    opacity: active ? 1 : 0,
+    transform: active ? 'translateY(0)' : 'translateY(20px)',
+    transition: `opacity 0.6s ${EASE} ${delay}s, transform 0.6s ${EASE} ${delay}s, filter 0.6s ${EASE} ${delay}s, text-shadow 0.8s ease ${delay}s, box-shadow 0.6s ease ${delay}s`,
+    ...extra,
+  });
+
   return (
     <section id="meter" ref={sectionRef} className="relative overflow-hidden px-5 py-24">
       {/* ═══════ HUD BACKGROUND LAYERS ═══════ */}
       <div className="cpm-hud" aria-hidden>
-        {/* Aurora glows */}
-        <div className="cpm-aurora cpm-aurora-cyan" style={{ opacity: 0.5 + (level / 100) * 0.4 }} />
-        <div className="cpm-aurora cpm-aurora-magenta" style={{ opacity: 0.35 + (level / 100) * 0.4 }} />
-        <div className="cpm-aurora cpm-aurora-green" />
+        {/* Aurora glows — boosted during boot */}
+        <div className="cpm-aurora cpm-aurora-cyan" style={{ opacity: (0.5 + (level / 100) * 0.4) * bgBoost }} />
+        <div className="cpm-aurora cpm-aurora-magenta" style={{ opacity: (0.35 + (level / 100) * 0.4) * bgBoost }} />
+        <div className="cpm-aurora cpm-aurora-green" style={{ opacity: bgBoost }} />
 
         {/* Drifting grid */}
         <div className="cpm-grid" />
@@ -301,24 +409,38 @@ export default function CyberpsychoMeter() {
 
       {/* ═══════ MAIN CONTENT ═══════ */}
       <div className="relative z-10 mx-auto max-w-3xl">
-        <div className="mb-12 text-center reveal-glitch">
-          <div className="font-mono text-xs tracking-[0.4em] text-cyber-yellow animate-flicker">// LIVE DIAGNOSTIC</div>
-          <h2 className="mt-3 font-display text-4xl font-black tracking-tight text-white sm:text-5xl">
+        <div className="mb-12 text-center">
+          <div
+            className="font-mono text-xs tracking-[0.4em] text-cyber-yellow animate-flicker"
+            style={boot(0)}
+          >
+            // LIVE DIAGNOSTIC
+          </div>
+          <h2
+            className="mt-3 font-display text-4xl font-black tracking-tight text-white sm:text-5xl"
+            style={boot(0.15, {
+              textShadow: active ? '0 0 18px rgba(255,0,168,0.45)' : '0 0 0 transparent',
+              filter: active ? 'none' : 'blur(3px)',
+            })}
+          >
             CYBERPSYCHO <span className="text-cyber-magenta text-glow-magenta rgb-hover">METER</span>
           </h2>
-          <p className="mx-auto mt-5 max-w-xl font-body text-lg text-gray-400">
+          <p
+            className="mx-auto mt-5 max-w-xl font-body text-lg text-gray-400"
+            style={boot(0.3)}
+          >
             Real-time measurement of your $CYBER-induced psychological state.
             The higher you go, the closer to flatline. No refunds on your humanity.
           </p>
         </div>
 
         <div className="relative">
-          {/* Floating diagnostic widgets — hidden on mobile to keep responsive */}
+          {/* Floating diagnostic widgets — sequential boot, hidden on mobile */}
           <div className="cpm-widgets" aria-hidden>
             {WIDGETS.map((w, i) => {
               const Icon = w.icon;
               const side = w.pos === 'left' ? 'left' : 'right';
-              const val = w.jitter > 0 ? Math.round(liveVals[w.key] ?? w.base(level)) : null;
+              const val = w.jitter > 0 ? Math.round(liveVals[w.key] ?? 0) : null;
               const catVal = w.key === 'me' ? MEME_LEVELS[memeIdx]
                 : w.key === 'net' ? NET_STATES[netIdx]
                 : w.key === 'ai' ? AI_STATES[aiIdx] : null;
@@ -326,11 +448,13 @@ export default function CyberpsychoMeter() {
                 <div
                   key={w.key}
                   className={`cpm-widget cpm-widget-${side}`}
-                  style={{
-                    animationDelay: `${i * 0.8}s`,
+                  style={boot(0.3 + i * 0.1, {
                     ['--w-color' as string]: w.color,
-                    opacity: glowIntensity * 0.55,
-                  }}
+                    opacity: active ? glowIntensity * 0.55 : 0,
+                    boxShadow: active
+                      ? `0 0 12px ${w.color}40, inset 0 0 8px ${w.color}20`
+                      : 'none',
+                  })}
                 >
                   <div className="cpm-widget-head">
                     <Icon className="h-3 w-3" />
@@ -363,8 +487,13 @@ export default function CyberpsychoMeter() {
 
           {/* Main card */}
           <div
-            className="reveal-pop clip-cyber scan-card border border-cyber-magenta/40 bg-cyber-panel/60 p-8 box-glow-cyan"
-            style={{ boxShadow: `0 0 ${20 + level * 0.3}px rgba(0,240,255,${0.15 + (level / 100) * 0.25})` }}
+            className="clip-cyber scan-card border border-cyber-magenta/40 bg-cyber-panel/60 p-8 box-glow-cyan"
+            style={boot(0.5, {
+              transform: active ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.98)',
+              boxShadow: active
+                ? `0 0 ${20 + level * 0.3}px rgba(0,240,255,${0.15 + (level / 100) * 0.25})`
+                : '0 0 0 rgba(0,240,255,0)',
+            })}
           >
             {/* HUD corner brackets */}
             <span className="cpm-bracket cpm-bracket-tl" />
@@ -390,18 +519,19 @@ export default function CyberpsychoMeter() {
                 NEURAL WAVEFORM // CH-01
               </div>
               <div className="pointer-events-none absolute right-2 top-1 font-mono text-[8px] tracking-[0.2em] text-cyber-cyan/50">
-                {Math.round(level)}%
+                {Math.round(displayLevel)}%
               </div>
             </div>
 
-            {/* Bar */}
+            {/* Bar — fills smoothly from 0 on boot */}
             <div className="relative h-10 w-full overflow-hidden border border-cyber-cyan/30 bg-cyber-darker">
               <div
-                className="h-full transition-all duration-100 ease-linear"
+                className="h-full"
                 style={{
-                  width: `${level}%`,
+                  width: `${displayLevel}%`,
                   background: `linear-gradient(90deg, #39FF14, #00F0FF, #FFE600, #FF00A8, #FF2D2D)`,
                   boxShadow: `0 0 20px ${current.color}`,
+                  transition: 'width 0.1s linear',
                 }}
               />
               {[20, 40, 60, 80].map((t) => (
@@ -409,31 +539,50 @@ export default function CyberpsychoMeter() {
               ))}
             </div>
 
-            {/* Readout */}
-            <div className="mt-6 flex flex-col items-center gap-3 text-center">
+            {/* Readout — fades in after the bar finishes filling */}
+            <div
+              className="mt-6 flex flex-col items-center gap-3 text-center"
+              style={{
+                opacity: statusVisible ? 1 : 0,
+                transform: statusVisible ? 'translateY(0)' : 'translateY(10px)',
+                transition: `opacity 0.5s ${EASE}, transform 0.5s ${EASE}`,
+              }}
+            >
               <div className="flex items-center gap-2">
-                {level >= 90 ? (
+                {displayLevel >= 90 ? (
                   <AlertTriangle className="h-6 w-6 animate-pulse text-cyber-red" />
-                ) : level >= 70 ? (
+                ) : displayLevel >= 70 ? (
                   <Zap className="h-6 w-6 text-cyber-yellow" />
                 ) : (
                   <Brain className="h-6 w-6 text-cyber-cyan" />
                 )}
                 <span
-                  className="font-display text-3xl font-black tracking-widest transition-colors"
-                  style={{ color: current.color, textShadow: `0 0 12px ${current.color}` }}
+                  className="font-display text-3xl font-black tracking-widest"
+                  style={{
+                    color: current.color,
+                    textShadow: statusVisible
+                      ? `0 0 16px ${current.color}`
+                      : `0 0 0 ${current.color}`,
+                    transition: `color 0.3s ease, text-shadow 0.6s ease`,
+                  }}
                 >
                   {current.label}
                 </span>
               </div>
               <div className="font-mono text-2xl font-bold text-white">
-                {Math.floor(level)}<span className="text-cyber-magenta">%</span>
+                {Math.floor(displayLevel)}<span className="text-cyber-magenta">%</span>
               </div>
               <p className="font-body text-base text-gray-300">{current.desc}</p>
             </div>
 
             {/* Manual override */}
-            <div className="mt-6 flex items-center justify-center gap-3">
+            <div
+              className="mt-6 flex items-center justify-center gap-3"
+              style={{
+                opacity: statusVisible ? 1 : 0,
+                transition: `opacity 0.5s ${EASE} 0.2s`,
+              }}
+            >
               <button
                 onClick={() => setAuto(false)}
                 className="clip-cyber-sm border border-cyber-cyan/40 bg-cyber-dark px-4 py-2 font-mono text-xs tracking-widest text-cyber-cyan transition-all hover:bg-cyber-cyan/10"
