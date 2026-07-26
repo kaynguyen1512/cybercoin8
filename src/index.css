@@ -365,3 +365,208 @@
   50% { transform: translate(-1px, 2px) rotate(0.1deg); }
   75% { transform: translate(-2px, -1px) rotate(-0.05deg); }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOKENOMICS — living blockchain OS background
+   ═══════════════════════════════════════════════════════════════════ */
+
+.tokenomics-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* — Aurora: huge slow blurred gradients for depth — */
+.tb-aurora-layer { position: absolute; inset: 0; }
+.tb-aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  will-change: transform, opacity;
+}
+@keyframes tbAuroraDrift {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0.5; }
+  50%  { transform: translate(40px, -30px) scale(1.15); opacity: 0.9; }
+  100% { transform: translate(-30px, 20px) scale(0.95); opacity: 0.6; }
+}
+
+/* — Faint grid — */
+.tb-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,240,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,240,255,0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at 50% 50%, black 20%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 20%, transparent 80%);
+}
+
+/* — Data flow lines — */
+.tb-data-lines { position: absolute; inset: 0; }
+.tb-data-line {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.5), transparent);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+@keyframes tbDataFlow {
+  0%   { transform: translateX(-60%) translateY(0); opacity: 0; }
+  15%  { opacity: 0.05; }
+  85%  { opacity: 0.05; }
+  100% { transform: translateX(220%) translateY(0); opacity: 0; }
+}
+@keyframes tbDataFlowH {
+  0%   { transform: translateX(-80%); opacity: 0; }
+  15%  { opacity: 0.05; }
+  85%  { opacity: 0.05; }
+  100% { transform: translateX(260%); opacity: 0; }
+}
+
+/* — Blockchain network — */
+.tb-network {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* — Floating blockchain text — */
+.tb-floaters { position: absolute; inset: 0; }
+.tb-floater {
+  position: absolute;
+  font-family: 'Share Tech Mono', monospace;
+  color: rgba(0,240,255,0.05);
+  letter-spacing: 0.15em;
+  white-space: nowrap;
+  filter: blur(0.5px);
+  animation-name: tbFloaterRise;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+@keyframes tbFloaterRise {
+  0%   { transform: translateY(0); opacity: 0; }
+  10%  { opacity: 0.05; }
+  90%  { opacity: 0.05; }
+  100% { transform: translateY(-120vh); opacity: 0; }
+}
+
+/* — Holographic diagnostic panels — */
+.tb-panels { position: absolute; inset: 0; }
+.tb-panel {
+  position: absolute;
+  width: 170px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0,240,255,0.12);
+  background: rgba(8,10,18,0.45);
+  backdrop-filter: blur(2px);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px;
+  line-height: 1.5;
+  color: rgba(0,240,255,0.35);
+  letter-spacing: 0.12em;
+  opacity: 0;
+  animation-name: tbPanelCycle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+}
+.tb-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-bottom: 5px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid rgba(0,240,255,0.12);
+  color: rgba(0,240,255,0.5);
+  font-size: 7px;
+}
+.tb-panel-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(57,255,20,0.7);
+  box-shadow: 0 0 4px rgba(57,255,20,0.6);
+}
+.tb-panel-rows { display: flex; flex-direction: column; gap: 2px; }
+.tb-panel-row { display: flex; justify-content: space-between; }
+.tb-panel-k { color: rgba(180,200,220,0.4); }
+.tb-panel-v { color: rgba(0,240,255,0.55); }
+@keyframes tbPanelCycle {
+  0%   { transform: translate(0, 0); opacity: 0; }
+  15%  { opacity: 0.7; }
+  40%  { transform: translate(6px, -4px); opacity: 0.7; }
+  70%  { transform: translate(-4px, 3px); opacity: 0.5; }
+  85%  { opacity: 0.3; }
+  100% { transform: translate(0, 0); opacity: 0; }
+}
+
+/* — Scan bars — */
+.tb-scans { position: absolute; inset: 0; }
+.tb-scan {
+  position: absolute;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.tb-scan-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,240,255,0.18), transparent);
+  animation-name: tbScanH;
+}
+.tb-scan-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(120,80,255,0.16), transparent);
+  animation-name: tbScanV;
+}
+.tb-scan-d {
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,200,255,0.14), transparent);
+  animation-name: tbScanD;
+}
+@keyframes tbScanH {
+  0%   { transform: translateY(-20px); opacity: 0; }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.6; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+@keyframes tbScanV {
+  0%   { transform: translateX(-20px); opacity: 0; }
+  10%  { opacity: 0.5; }
+  90%  { opacity: 0.5; }
+  100% { transform: translateX(100vw); opacity: 0; }
+}
+@keyframes tbScanD {
+  0%   { transform: translateY(-20px) translateX(-10vw); opacity: 0; }
+  10%  { opacity: 0.5; }
+  90%  { opacity: 0.5; }
+  100% { transform: translateY(100vh) translateX(10vw); opacity: 0; }
+}
+
+/* — Network pulse movement (SVG circles) — */
+@keyframes tbPulseMove {
+  0%   { offset-distance: 0%; opacity: 0; }
+  10%  { opacity: 0.9; }
+  90%  { opacity: 0.9; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+/* — Respect reduced motion — */
+@media (prefers-reduced-motion: reduce) {
+  .tokenomics-bg *,
+  .tokenomics-bg *::before,
+  .tokenomics-bg *::after {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+}
