@@ -35,7 +35,6 @@ export default function App() {
         </div>
         <About />
         <CrewDatabase />
-        <Gallery />
         <Tokenomics />
         <CyberpsychoMeter />
         <Roadmap />
