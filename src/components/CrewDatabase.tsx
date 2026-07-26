@@ -104,6 +104,16 @@ interface SceneRefs {
 function CrewScene({ member, index, refs }: { member: CrewMember; index: number; refs: SceneRefs }) {
   const isFinal = member.side === 'center';
   const isLeft = member.side === 'left';
+  const sceneRootRef = useRef<HTMLDivElement | null>(null);
+  const nameElRef = useRef<HTMLHeadingElement | null>(null);
+
+  const handleHover = () => {
+    const scene = sceneRootRef.current;
+    const name = nameElRef.current;
+    if (!scene || !name) return;
+    if (parseFloat(scene.style.opacity || '0') < 0.5) return;
+    triggerCrewGlitch(scene, name);
+  };
 
   const sceneStyle: CSSProperties = {
     position: 'absolute',
@@ -120,6 +130,7 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
 
   const portrait = (
     <div
+      className="crew-card"
       style={{
         width: '100%',
         aspectRatio: '3 / 4',
@@ -176,13 +187,13 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
         <div className="crew-divider mt-4 w-32" />
       </div>
       <h3
-        ref={(el) => refs.text(2, el)}
+        ref={(el) => { nameElRef.current = el; refs.text(2, el); }}
         data-final-name={member.name}
-        onMouseEnter={(e) => decodeNameOnHover(e.currentTarget)}
-        className={`crew-name mt-4 font-display font-black leading-[0.92] tracking-tight text-white ${
+        className={`crew-name mt-4 font-display font-black leading-[0.92] tracking-tight ${
           isFinal ? 'text-[clamp(3.2rem,9vw,6.5rem)]' : 'text-[clamp(2.6rem,6.5vw,5rem)]'
-        }`}
-        style={{ opacity: 0, willChange: 'transform, opacity', pointerEvents: 'auto' }}
+        }`
+      }
+        style={{ opacity: 0, willChange: 'transform, opacity' }}
       >
         {member.name}
       </h3>
@@ -190,19 +201,22 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
   );
 
   return (
-    <div ref={refs.scene} style={sceneStyle}>
+    <div ref={(el) => { sceneRootRef.current = el; refs.scene(el); }} style={sceneStyle}>
       {isFinal ? (
-  <div
-    className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-6 md:gap-12"
-    style={{
-      transform: "translateY(-70px)",
-    }}
-  >
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-6 md:gap-12"
+          style={{ transform: 'translateY(-70px)', pointerEvents: 'auto' }}
+          onMouseEnter={handleHover}
+        >
           <div style={{ width: 'min(560px,54vw)' }}>{portrait}</div>
           {textBlock}
         </div>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center px-6">
+        <div
+          className="absolute inset-0 flex items-center justify-center px-6"
+          style={{ pointerEvents: 'auto' }}
+          onMouseEnter={handleHover}
+        >
           <div
             className="flex items-center gap-6 md:gap-12"
             style={{
@@ -256,21 +270,23 @@ function startDecode(el: HTMLElement) {
   requestAnimationFrame(step);
 }
 
-// Hover-triggered identity decode on the character NAME. Scrambles the
-// entire name through random futuristic characters, then progressively
-// resolves left→right. ~780–900ms. Cannot retrigger while playing; replays
-// on every fresh mouseenter. Preserves original letter casing.
+// Hover-triggered synchronized glitch: the whole crew record (card, image,
+// name) shakes together while the entire name decodes left→right through
+// random futuristic characters. ~780–900ms. Cannot retrigger while playing;
+// replays on every fresh mouseenter. Preserves original letter casing.
 const HOVER_DECODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&@!?+=<>[]{}/*';
-function decodeNameOnHover(el: HTMLElement) {
-  if (el.dataset.decoding === '1') return;
-  el.dataset.decoding = '1';
-  el.classList.add('crew-decoding');
+function triggerCrewGlitch(sceneEl: HTMLElement, nameEl: HTMLElement) {
+  if (nameEl.dataset.decoding === '1') return;
+  nameEl.dataset.decoding = '1';
+  sceneEl.classList.add('crew-glitch');
+  nameEl.classList.add('crew-decoding');
 
-  const finalText = el.dataset.finalName || el.textContent || '';
+  const finalText = nameEl.dataset.finalName || nameEl.textContent || '';
   const len = finalText.length;
   if (!len) {
-    el.dataset.decoding = '';
-    el.classList.remove('crew-decoding');
+    nameEl.dataset.decoding = '';
+    sceneEl.classList.remove('crew-glitch');
+    nameEl.classList.remove('crew-decoding');
     return;
   }
 
@@ -282,12 +298,13 @@ function decodeNameOnHover(el: HTMLElement) {
     const elapsed = now - startTs;
 
     if (elapsed >= totalDuration) {
-      el.textContent = finalText;
-      el.classList.remove('crew-decoding');
-      el.classList.add('crew-fadeout');
+      nameEl.textContent = finalText;
+      sceneEl.classList.remove('crew-glitch');
+      nameEl.classList.remove('crew-decoding');
+      nameEl.classList.add('crew-fadeout');
       window.setTimeout(() => {
-        el.classList.remove('crew-fadeout');
-        el.dataset.decoding = '';
+        nameEl.classList.remove('crew-fadeout');
+        nameEl.dataset.decoding = '';
       }, 350);
       return;
     }
@@ -309,7 +326,7 @@ function decodeNameOnHover(el: HTMLElement) {
         out += HOVER_DECODE_CHARS[(Math.random() * HOVER_DECODE_CHARS.length) | 0];
       }
     }
-    el.textContent = out;
+    nameEl.textContent = out;
     requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -560,29 +577,26 @@ function CrewFXStyles() {
   filter: drop-shadow(0 0 5px rgba(0,240,255,0.45));
   animation: crewHoloShimmer 7s linear infinite;
 }
-@keyframes crewNameGhost {
-  0%, 86%, 100% {
-    text-shadow: 0 0 10px rgba(0,240,255,0.22), 0 0 28px rgba(0,240,255,0.10);
-  }
-  89% {
-    text-shadow: -1.5px 0 rgba(255,0,168,0.30), 1.5px 0 rgba(0,240,255,0.30), 0 0 10px rgba(0,240,255,0.22);
-  }
-  92% {
-    text-shadow: 0 0 10px rgba(0,240,255,0.22), 0 0 28px rgba(0,240,255,0.10);
-  }
-  95% {
-    text-shadow: 1px 0 rgba(255,0,168,0.22), -1px 0 rgba(0,240,255,0.22), 0 0 10px rgba(0,240,255,0.22);
-  }
+@keyframes crewNameFlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
 }
 .crew-name {
-  animation: crewNameGhost 8s ease-in-out infinite;
-  transition: text-shadow 0.35s ease-out, filter 0.35s ease-out;
+  background: linear-gradient(90deg,
+    #00f0ff 0%, #4d7fff 12%, #b14dff 24%, #ff2ec4 36%,
+    #ff4d8d 48%, #ffe600 60%, #ffffff 72%, #4d7fff 84%, #00f0ff 100%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 0 8px rgba(0,240,255,0.28));
+  animation: crewNameFlow 16s linear infinite;
+  transition: filter 0.35s ease-out;
   position: relative;
 }
 .crew-name.crew-decoding {
-  animation: none;
-  text-shadow: 0 0 12px rgba(0,240,255,0.55), 0 0 28px rgba(0,240,255,0.25), 1px 0 rgba(255,0,168,0.35), -1px 0 rgba(0,240,255,0.35);
-  filter: brightness(1.15);
+  filter: drop-shadow(1px 0 rgba(255,0,168,0.5)) drop-shadow(-1px 0 rgba(0,240,255,0.5)) drop-shadow(0 0 14px rgba(0,240,255,0.6)) drop-shadow(0 0 22px rgba(255,0,168,0.25)) brightness(1.2);
 }
 .crew-name.crew-decoding::after {
   content: '';
@@ -603,9 +617,7 @@ function CrewFXStyles() {
   pointer-events: none;
 }
 .crew-name.crew-fadeout {
-  animation: none;
-  text-shadow: 0 0 10px rgba(0,240,255,0.22), 0 0 28px rgba(0,240,255,0.10);
-  filter: brightness(1);
+  filter: drop-shadow(0 0 8px rgba(0,240,255,0.28));
 }
 @keyframes crewNameSweep {
   0% { background-position: -100% 0; }
@@ -614,6 +626,50 @@ function CrewFXStyles() {
 @keyframes crewNameScanFade {
   0% { opacity: 0.7; }
   100% { opacity: 0; }
+}
+
+/* ── Synchronized crew glitch (hover) ── */
+@keyframes crewCardShake {
+  0% { transform: translate(0,0); }
+  8% { transform: translate(-2.5px, 1.5px); }
+  16% { transform: translate(2.5px, -2px); }
+  24% { transform: translate(-2px, -2.5px); }
+  32% { transform: translate(2px, 2.5px); }
+  40% { transform: translate(-1.5px, 2px); }
+  50% { transform: translate(1.5px, -1.5px); }
+  60% { transform: translate(-1px, 1px); }
+  70% { transform: translate(1px, -0.5px); }
+  80% { transform: translate(-0.5px, 0.5px); }
+  100% { transform: translate(0,0); }
+}
+@keyframes crewNameShake {
+  0% { transform: translate(0,0); }
+  10% { transform: translate(-2px, 0.5px); }
+  20% { transform: translate(2px, -1px); }
+  30% { transform: translate(-1.5px, -1px); }
+  40% { transform: translate(1.5px, 1px); }
+  50% { transform: translate(-1px, 0.5px); }
+  60% { transform: translate(1px, -0.5px); }
+  70% { transform: translate(-0.5px, 0); }
+  100% { transform: translate(0,0); }
+}
+@keyframes crewWellGlitch {
+  0%,100% { filter: none; }
+  10% { filter: drop-shadow(2px 0 rgba(255,0,60,0.55)) drop-shadow(-2px 0 rgba(0,240,255,0.55)); }
+  25% { filter: drop-shadow(-1.5px 0 rgba(255,0,60,0.4)) drop-shadow(1.5px 0 rgba(0,240,255,0.4)); }
+  40% { filter: drop-shadow(2px 0 rgba(255,0,168,0.45)) drop-shadow(-2px 0 rgba(0,240,255,0.45)); }
+  55% { filter: drop-shadow(-1px 0 rgba(255,0,60,0.3)) drop-shadow(1px 0 rgba(0,240,255,0.3)); }
+  70% { filter: drop-shadow(0.5px 0 rgba(255,0,60,0.15)) drop-shadow(-0.5px 0 rgba(0,240,255,0.15)); }
+  85% { filter: none; }
+}
+.crew-glitch .crew-card {
+  animation: crewCardShake 0.85s ease-out forwards;
+}
+.crew-glitch .crew-card-well {
+  animation: crewWellGlitch 0.85s ease-out forwards;
+}
+.crew-glitch .crew-name {
+  animation: crewNameFlow 16s linear infinite, crewNameShake 0.85s ease-out forwards;
 }
 .crew-divider {
   position: relative;
@@ -716,7 +772,7 @@ function CyberFrame({ member, index }: { member: CrewMember; index: number }) {
         >
           {/* Image well */}
           <div
-            className="absolute overflow-hidden"
+            className="crew-card-well absolute overflow-hidden"
             style={{
               inset: '12px',
               boxShadow:
