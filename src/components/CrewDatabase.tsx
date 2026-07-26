@@ -177,10 +177,12 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
       </div>
       <h3
         ref={(el) => refs.text(2, el)}
+        data-final-name={member.name}
+        onMouseEnter={(e) => decodeNameOnHover(e.currentTarget)}
         className={`crew-name mt-4 font-display font-black leading-[0.92] tracking-tight text-white ${
           isFinal ? 'text-[clamp(3.2rem,9vw,6.5rem)]' : 'text-[clamp(2.6rem,6.5vw,5rem)]'
         }`}
-        style={{ opacity: 0, willChange: 'transform, opacity' }}
+        style={{ opacity: 0, willChange: 'transform, opacity', pointerEvents: 'auto' }}
       >
         {member.name}
       </h3>
@@ -247,6 +249,65 @@ function startDecode(el: HTMLElement) {
       const ch = finalText[i];
       if (ch === ' ' || i < resolved) out += ch;
       else out += SCRAMBLE_CHARS[(Math.random() * SCRAMBLE_CHARS.length) | 0];
+    }
+    el.textContent = out;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Hover-triggered identity decode on the character NAME. Scrambles the
+// entire name through random futuristic characters, then progressively
+// resolves left→right. ~780–900ms. Cannot retrigger while playing; replays
+// on every fresh mouseenter. Preserves original letter casing.
+const HOVER_DECODE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&@!?+=<>[]{}/*';
+function decodeNameOnHover(el: HTMLElement) {
+  if (el.dataset.decoding === '1') return;
+  el.dataset.decoding = '1';
+  el.classList.add('crew-decoding');
+
+  const finalText = el.dataset.finalName || el.textContent || '';
+  const len = finalText.length;
+  if (!len) {
+    el.dataset.decoding = '';
+    el.classList.remove('crew-decoding');
+    return;
+  }
+
+  const totalDuration = 780 + Math.random() * 120; // 780–900ms
+  const glitchPhase = 90 + Math.random() * 30;    // 90–120ms RGB glitch
+  const startTs = performance.now();
+
+  const step = (now: number) => {
+    const elapsed = now - startTs;
+
+    if (elapsed >= totalDuration) {
+      el.textContent = finalText;
+      el.classList.remove('crew-decoding');
+      el.classList.add('crew-fadeout');
+      window.setTimeout(() => {
+        el.classList.remove('crew-fadeout');
+        el.dataset.decoding = '';
+      }, 350);
+      return;
+    }
+
+    let resolved: number;
+    if (elapsed < glitchPhase) {
+      resolved = 0;
+    } else {
+      const decodeT = (elapsed - glitchPhase) / (totalDuration - glitchPhase);
+      resolved = Math.floor(decodeT * len);
+    }
+
+    let out = '';
+    for (let i = 0; i < len; i++) {
+      const ch = finalText[i];
+      if (ch === ' ' || i < resolved) {
+        out += ch;
+      } else {
+        out += HOVER_DECODE_CHARS[(Math.random() * HOVER_DECODE_CHARS.length) | 0];
+      }
     }
     el.textContent = out;
     requestAnimationFrame(step);
@@ -513,7 +574,47 @@ function CrewFXStyles() {
     text-shadow: 1px 0 rgba(255,0,168,0.22), -1px 0 rgba(0,240,255,0.22), 0 0 10px rgba(0,240,255,0.22);
   }
 }
-.crew-name { animation: crewNameGhost 8s ease-in-out infinite; }
+.crew-name {
+  animation: crewNameGhost 8s ease-in-out infinite;
+  transition: text-shadow 0.35s ease-out, filter 0.35s ease-out;
+  position: relative;
+}
+.crew-name.crew-decoding {
+  animation: none;
+  text-shadow: 0 0 12px rgba(0,240,255,0.55), 0 0 28px rgba(0,240,255,0.25), 1px 0 rgba(255,0,168,0.35), -1px 0 rgba(0,240,255,0.35);
+  filter: brightness(1.15);
+}
+.crew-name.crew-decoding::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(0,240,255,0.3) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: crewNameSweep 0.85s ease-out forwards;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.crew-name.crew-decoding::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(0,240,255,0.06) 2px, rgba(0,240,255,0.06) 3px);
+  animation: crewNameScanFade 0.85s ease-out forwards;
+  pointer-events: none;
+}
+.crew-name.crew-fadeout {
+  animation: none;
+  text-shadow: 0 0 10px rgba(0,240,255,0.22), 0 0 28px rgba(0,240,255,0.10);
+  filter: brightness(1);
+}
+@keyframes crewNameSweep {
+  0% { background-position: -100% 0; }
+  100% { background-position: 100% 0; }
+}
+@keyframes crewNameScanFade {
+  0% { opacity: 0.7; }
+  100% { opacity: 0; }
+}
 .crew-divider {
   position: relative;
   height: 1px;
