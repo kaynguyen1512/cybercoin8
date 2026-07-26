@@ -156,12 +156,12 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
         <span
           ref={(el) => refs.text(4, el)}
           className="crew-file-led"
-          style={{ opacity: 0 }}
+          style={{ opacity: 0, willChange: 'opacity' }}
         />
         <p
           ref={(el) => refs.text(0, el)}
           className="font-mono text-[11px] tracking-[0.5em] text-gray-600"
-          style={{ opacity: 0 }}
+          style={{ opacity: 0, willChange: 'transform, opacity' }}
         >
           {member.file}
         </p>
@@ -169,14 +169,14 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
       <p
         ref={(el) => refs.text(1, el)}
         className="crew-codename mt-5 font-mono text-xs uppercase tracking-[0.42em]"
-        style={{ opacity: 0 }}
+        style={{ opacity: 0, willChange: 'transform, opacity' }}
       >
         {member.codename}
       </p>
       <div
         ref={(el) => refs.text(3, el)}
         className={`mt-3 flex flex-col ${align}`}
-        style={{ opacity: 0 }}
+        style={{ opacity: 0, willChange: 'transform, opacity' }}
       >
         <span className="font-mono text-[9px] tracking-[0.3em] text-gray-600">
           {member.meta[0]}
@@ -193,7 +193,7 @@ function CrewScene({ member, index, refs }: { member: CrewMember; index: number;
           isFinal ? 'text-[clamp(3.2rem,9vw,6.5rem)]' : 'text-[clamp(2.6rem,6.5vw,5rem)]'
         }`
       }
-        style={{ opacity: 0 }}
+        style={{ opacity: 0, willChange: 'transform, opacity' }}
       >
         {member.name}
       </h3>
@@ -385,28 +385,9 @@ function useCrewEngine(
         const z = -(i + 1) * SPACING + offset;
         const op = depthOpacity(z);
 
-        // Skip fully-transparent records: drop them from the compositor and
-        // skip per-frame transform/opacity writes. Their ambient animations
-        // are gated by .crew-active (toggled below), so off-camera records
-        // cost nothing on the GPU.
-        if (op <= 0) {
-          if (scene.style.visibility !== 'hidden') scene.style.visibility = 'hidden';
-          const bg = bgs[i];
-          if (bg && bg.style.opacity !== '0') bg.style.opacity = '0';
-          continue;
-        }
-        if (scene.style.visibility === 'hidden') scene.style.visibility = 'visible';
-
         // Only transform + opacity — no layout recalculation.
         scene.style.transform = `translateZ(${z}px)`;
         scene.style.opacity = String(op);
-
-        // Toggle ambient animations only while the record is actually on screen.
-        const isOn = op > 0.01;
-        if (isOn !== (scene.dataset.on === '1')) {
-          scene.dataset.on = isOn ? '1' : '0';
-          scene.classList.toggle('crew-active', isOn);
-        }
 
         const bg = bgs[i];
         if (bg) bg.style.opacity = String(op * 0.55);
@@ -544,47 +525,37 @@ function CrewFXStyles() {
   100% { transform: translateY(900px); opacity: 0; }
 }
 @keyframes crewHoloGlow {
-  0%,100% { opacity: 0.7; }
-  50% { opacity: 1; }
+  0%,100% { box-shadow: 0 0 16px rgba(0,240,255,0.22), inset 0 0 16px rgba(0,240,255,0.12); }
+  50% { box-shadow: 0 0 28px rgba(0,240,255,0.42), inset 0 0 24px rgba(0,240,255,0.22); }
 }
 @keyframes crewBloom {
   0%,100% { opacity: 0.25; }
   50% { opacity: 0.55; }
 }
 @keyframes crewLedPulse {
-  0%,100% { opacity: 0.45; }
-  50% { opacity: 1; }
+  0%,100% { opacity: 0.35; box-shadow: 0 0 3px currentColor; }
+  50% { opacity: 1; box-shadow: 0 0 7px currentColor, 0 0 13px currentColor; }
 }
-.crew-flicker { animation: none; }
-.crew-active .crew-flicker { animation: crewFlicker 4.2s steps(1) infinite; }
+.crew-flicker { animation: crewFlicker 4.2s steps(1) infinite; }
 .crew-scanlines { position:absolute; inset:0; background: repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(0,0,0,0.32) 2px, rgba(0,0,0,0.32) 3px); opacity:0.22; mix-blend-mode:multiply; pointer-events:none; }
 .crew-glass { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
-.crew-glass-bar { position:absolute; top:0; left:0; width:42%; height:100%; background:linear-gradient(115deg, transparent, rgba(255,255,255,0.16), transparent); animation: none; }
-.crew-active .crew-glass-bar { animation: crewGlassSweep 7s ease-in-out infinite; }
+.crew-glass-bar { position:absolute; top:0; left:0; width:42%; height:100%; background:linear-gradient(115deg, transparent, rgba(255,255,255,0.16), transparent); animation: crewGlassSweep 7s ease-in-out infinite; }
 .crew-scanbar { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
-.crew-scanbar-line { position:absolute; left:0; right:0; height:12px; top:0; background:linear-gradient(180deg, transparent, rgba(0,240,255,0.4), transparent); box-shadow:0 0 14px rgba(0,240,255,0.45); animation: none; }
-.crew-active .crew-scanbar-line { animation: crewScanBar 5.5s linear infinite; }
+.crew-scanbar-line { position:absolute; left:0; right:0; height:12px; top:0; background:linear-gradient(180deg, transparent, rgba(0,240,255,0.4), transparent); box-shadow:0 0 14px rgba(0,240,255,0.45); animation: crewScanBar 5.5s linear infinite; }
 .crew-ca-red { position:absolute; inset:0; box-shadow: inset 2px 0 0 rgba(255,0,60,0.35), inset -2px 0 0 rgba(255,0,60,0.22); mix-blend-mode:screen; opacity:0.5; pointer-events:none; }
 .crew-ca-cyan { position:absolute; inset:0; box-shadow: inset -2px 0 0 rgba(0,240,255,0.35), inset 2px 0 0 rgba(0,240,255,0.22); mix-blend-mode:screen; opacity:0.5; pointer-events:none; }
-.crew-bloom { position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(0,240,255,0.12), transparent 70%); animation: none; pointer-events:none; mix-blend-mode:screen; }
-.crew-active .crew-bloom { animation: crewBloom 5s ease-in-out infinite; }
-.crew-holo { position:absolute; inset:0; border:1px solid rgba(0,240,255,0.28); box-shadow: 0 0 28px rgba(0,240,255,0.42), inset 0 0 24px rgba(0,240,255,0.22); animation: none; pointer-events:none; }
-.crew-active .crew-holo { animation: crewHoloGlow 4s ease-in-out infinite; }
-.crew-led { box-shadow: 0 0 7px currentColor, 0 0 13px currentColor; animation: none; }
-.crew-active .crew-led { animation: crewLedPulse 2s ease-in-out infinite; }
+.crew-bloom { position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(0,240,255,0.12), transparent 70%); animation: crewBloom 5s ease-in-out infinite; pointer-events:none; mix-blend-mode:screen; }
+.crew-holo { position:absolute; inset:0; border:1px solid rgba(0,240,255,0.28); animation: crewHoloGlow 4s ease-in-out infinite; pointer-events:none; }
+.crew-led { animation: crewLedPulse 2s ease-in-out infinite; }
 
 /* ── Personnel-database text panel ── */
 @keyframes crewFileLed {
-  0%,100% { opacity: 0.5; }
-  50% { opacity: 1; }
+  0%,100% { box-shadow: 0 0 2px rgba(0,240,255,0.4); }
+  50% { box-shadow: 0 0 5px rgba(0,240,255,0.8), 0 0 10px rgba(0,240,255,0.4); }
 }
 .crew-file-led {
   width: 5px; height: 5px; border-radius: 9999px;
   background: #00f0ff;
-  box-shadow: 0 0 5px rgba(0,240,255,0.8), 0 0 10px rgba(0,240,255,0.4);
-  animation: none;
-}
-.crew-active .crew-file-led {
   animation: crewFileLed 2.6s ease-in-out infinite;
 }
 @keyframes crewHoloShimmer {
@@ -603,10 +574,7 @@ function CrewFXStyles() {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  text-shadow: 0 0 5px rgba(0,240,255,0.45);
-  animation: none;
-}
-.crew-active .crew-codename {
+  filter: drop-shadow(0 0 5px rgba(0,240,255,0.45));
   animation: crewHoloShimmer 7s linear infinite;
 }
 @keyframes crewNameFlow {
@@ -622,15 +590,13 @@ function CrewFXStyles() {
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  text-shadow: 0 0 8px rgba(0,240,255,0.28);
-  animation: none;
+  filter: drop-shadow(0 0 8px rgba(0,240,255,0.28));
+  animation: crewNameFlow 16s linear infinite;
+  transition: filter 0.35s ease-out;
   position: relative;
 }
-.crew-active .crew-name {
-  animation: crewNameFlow 16s linear infinite;
-}
 .crew-name.crew-decoding {
-  text-shadow: 0 0 14px rgba(0,240,255,0.6), 0 0 22px rgba(255,0,168,0.25), 1px 0 rgba(255,0,168,0.5), -1px 0 rgba(0,240,255,0.5);
+  filter: drop-shadow(1px 0 rgba(255,0,168,0.5)) drop-shadow(-1px 0 rgba(0,240,255,0.5)) drop-shadow(0 0 14px rgba(0,240,255,0.6)) drop-shadow(0 0 22px rgba(255,0,168,0.25)) brightness(1.2);
 }
 .crew-name.crew-decoding::after {
   content: '';
@@ -651,7 +617,7 @@ function CrewFXStyles() {
   pointer-events: none;
 }
 .crew-name.crew-fadeout {
-  text-shadow: 0 0 8px rgba(0,240,255,0.28);
+  filter: drop-shadow(0 0 8px rgba(0,240,255,0.28));
 }
 @keyframes crewNameSweep {
   0% { background-position: -100% 0; }
@@ -687,22 +653,20 @@ function CrewFXStyles() {
   70% { transform: translate(-0.5px, 0); }
   100% { transform: translate(0,0); }
 }
-@keyframes crewCaGlitch {
-  0%,100% { opacity: 0.5; }
-  15% { opacity: 0.95; }
-  30% { opacity: 0.6; }
-  50% { opacity: 0.85; }
-  70% { opacity: 0.55; }
-  85% { opacity: 0.7; }
+@keyframes crewWellGlitch {
+  0%,100% { filter: none; }
+  10% { filter: drop-shadow(2px 0 rgba(255,0,60,0.55)) drop-shadow(-2px 0 rgba(0,240,255,0.55)); }
+  25% { filter: drop-shadow(-1.5px 0 rgba(255,0,60,0.4)) drop-shadow(1.5px 0 rgba(0,240,255,0.4)); }
+  40% { filter: drop-shadow(2px 0 rgba(255,0,168,0.45)) drop-shadow(-2px 0 rgba(0,240,255,0.45)); }
+  55% { filter: drop-shadow(-1px 0 rgba(255,0,60,0.3)) drop-shadow(1px 0 rgba(0,240,255,0.3)); }
+  70% { filter: drop-shadow(0.5px 0 rgba(255,0,60,0.15)) drop-shadow(-0.5px 0 rgba(0,240,255,0.15)); }
+  85% { filter: none; }
 }
 .crew-glitch .crew-card {
   animation: crewCardShake 0.85s ease-out forwards;
 }
-.crew-glitch .crew-ca-red {
-  animation: crewCaGlitch 0.85s ease-out forwards;
-}
-.crew-glitch .crew-ca-cyan {
-  animation: crewCaGlitch 0.85s ease-out forwards;
+.crew-glitch .crew-card-well {
+  animation: crewWellGlitch 0.85s ease-out forwards;
 }
 .crew-glitch .crew-name {
   animation: crewNameFlow 16s linear infinite, crewNameShake 0.85s ease-out forwards;
